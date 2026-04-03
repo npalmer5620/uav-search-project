@@ -67,18 +67,21 @@ source install/setup.bash
 ## Usage
 
 ```bash
-# Terminal 1 — Start PX4 SITL
-cd ~/PX4-Autopilot
-make px4_sitl gz_x500_mono_cam
+# 1. Copy config and adjust for your machine
+cp config.env.example config.env
 
-# Terminal 2 — Micro XRCE-DDS Agent
-MicroXRCEAgent udp4 -p 8888
+# 2. Launch everything (PX4 SITL + XRCE-DDS Agent + camera bridge)
+./scripts/launch_sim.bash
 
-# Terminal 3 — Launch ROS 2 nodes (bridge + YOLO detector)
-ros2 launch uav_search bringup.launch.py
+# 3. In a second terminal, verify camera data
+source /opt/ros/jazzy/setup.bash
+ros2 topic hz /camera/image_raw
+
+# 4. (Optional) View camera feed
+python3 scripts/view_camera.py
 ```
 
-> Launch files and exact commands will be updated as packages are implemented.
+See `config.env.example` for available settings (render engine, world, camera rate).
 
 ## Project Structure
 
