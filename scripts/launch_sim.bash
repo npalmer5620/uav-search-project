@@ -37,10 +37,15 @@ echo "=== UAV Search Project ==="
 echo "PX4_DIR:                   $PX4_DIR"
 echo "PX4_SIM_MODEL:             ${PX4_SIM_MODEL:-gz_x500_mono_cam}"
 echo "PX4_GZ_SIM_RENDER_ENGINE:  ${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}"
+echo "PX4_GZ_WORLD:              ${PX4_GZ_WORLD:-default}"
 echo "=========================="
 
-# Export render engine for PX4/Gazebo
+# Export env vars for PX4/Gazebo
 export PX4_GZ_SIM_RENDER_ENGINE="${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}"
+export PX4_GZ_WORLD="${PX4_GZ_WORLD:-default}"
+
+# World name is used in Gazebo topic paths
+GZ_WORLD="${PX4_GZ_WORLD:-default}"
 
 # Start Micro XRCE-DDS Agent in background
 echo "Starting Micro XRCE-DDS Agent..."
@@ -81,14 +86,16 @@ done
 
 # Set camera render rate (defaults to 0 Hz)
 echo "Setting camera render rate to ${CAMERA_RATE:-2} Hz..."
-gz service -s /world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/image/set_rate \
+GZ_CAM_TOPIC="/world/${GZ_WORLD}/model/x500_mono_cam_0/link/camera_link/sensor/camera/image"
+
+gz service -s "${GZ_CAM_TOPIC}/set_rate" \
     --reqtype gz.msgs.Double --reptype gz.msgs.Empty --req "data: ${CAMERA_RATE:-2}.0" --timeout 5000 || true
 
 # Start ros_gz_bridge for camera (GZ -> ROS only)
 echo "Starting ros_gz_bridge for camera..."
 ros2 run ros_gz_bridge parameter_bridge \
-    '/world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/image@sensor_msgs/msg/Image[gz.msgs.Image' \
-    --ros-args -r '/world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/image:=/camera/image_raw' &
+    "${GZ_CAM_TOPIC}@sensor_msgs/msg/Image[gz.msgs.Image" \
+    --ros-args -r "${GZ_CAM_TOPIC}:=/camera/image_raw" &
 BRIDGE_PID=$!
 
 echo ""
