@@ -34,12 +34,11 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 | PX4 Autopilot   | SITL (latest main)            |
 | DDS Bridge      | Micro XRCE-DDS Agent          |
 | Object Detection| YOLOv11 (Ultralytics)          |
-| OS              | Ubuntu 24.04 ARM64 (UTM VM)   |
-| Host            | macOS (Apple Silicon)          |
+| OS              | Ubuntu 24.04                   |
 
 ## Prerequisites
 
-- **Ubuntu 24.04 ARM64** (running in UTM on macOS)
+- **Ubuntu 24.04**
 - **ROS 2 Jazzy** &mdash; [installation guide](https://docs.ros.org/en/jazzy/Installation.html)
 - **Gazebo Harmonic** &mdash; [installation guide](https://gazebosim.org/docs/harmonic/install)
 - **PX4 Autopilot** &mdash; [source build for SITL](https://docs.px4.io/main/en/dev_setup/building_px4.html)
