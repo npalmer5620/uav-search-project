@@ -5,17 +5,17 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 ## Architecture
 
 ```
-┌─────────────────┐       uXRCE-DDS        ┌─────────────────────┐
-│  PX4 Autopilot  │◄──────────────────────►│      ROS 2 Jazzy     │
+┌─────────────────┐       uXRCE-DDS        ┌──────────────────────┐
+│  PX4 Autopilot  │◄──────────────────────►│     ROS 2 Jazzy      │
 │     (SITL)      │    Micro XRCE-DDS      │                      │
 └─────────────────┘       Agent             │  ┌────────────────┐  │
                                             │  │ YOLO Detector  │  │
 ┌─────────────────┐    ros_gz_bridge        │  │  (YOLOv11)     │  │
 │ Gazebo Harmonic │────────────────────────►│  └───────┬────────┘  │
 │                 │   sensor_msgs/Image     │          │           │
-│  Quadcopter +   │                         │   Detections &       │
-│  Mono Camera    │                         │   Annotated Images   │
-└─────────────────┘                         └─────────────────────┘
+│  Quadcopter +   │                         │  Detections &        │
+│  Mono Camera    │                         │  Annotated Images    │
+└─────────────────┘                         └──────────────────────┘
 ```
 
 **Data flow:**
