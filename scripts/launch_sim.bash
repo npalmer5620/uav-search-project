@@ -44,6 +44,9 @@ echo "=========================="
 export PX4_GZ_SIM_RENDER_ENGINE="${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}"
 export PX4_GZ_WORLD="${PX4_GZ_WORLD:-default}"
 
+# Add our worlds/ directory so PX4/Gazebo can find custom world files
+export GZ_SIM_RESOURCE_PATH="${REPO_DIR}/worlds:${GZ_SIM_RESOURCE_PATH:-}"
+
 # World name is used in Gazebo topic paths
 GZ_WORLD="${PX4_GZ_WORLD:-default}"
 
@@ -55,10 +58,15 @@ XRCE_PID=$!
 # Give agent a moment to bind
 sleep 1
 
+# Create a named pipe so we can send commands to the PX4 shell later
+PX4_PIPE="/tmp/px4_pipe_$$"
+mkfifo "$PX4_PIPE"
+exec 3<>"$PX4_PIPE"   # hold the pipe open (read+write) so writes don't EOF PX4
+
 # Start PX4 SITL (this also launches Gazebo)
 echo "Starting PX4 SITL..."
 cd "$PX4_DIR"
-make px4_sitl "${PX4_SIM_MODEL:-gz_x500_mono_cam}" &
+make px4_sitl "${PX4_SIM_MODEL:-gz_x500_mono_cam}" <&3 &
 PX4_PID=$!
 
 # Cleanup on exit
@@ -67,13 +75,15 @@ cleanup() {
     echo "Shutting down..."
     kill $PX4_PID 2>/dev/null || true
     kill $XRCE_PID 2>/dev/null || true
+    exec 3>&-                          # close the pipe fd
+    rm -f "$PX4_PIPE"                  # remove the named pipe
     wait
 }
 trap cleanup EXIT INT TERM
 
 # Wait for Gazebo to be up before starting bridge
 echo "Waiting for Gazebo camera topic..."
-TIMEOUT=60
+TIMEOUT=120
 ELAPSED=0
 while ! gz topic -l 2>/dev/null | grep -q "camera"; do
     sleep 2
@@ -98,11 +108,32 @@ ros2 run ros_gz_bridge parameter_bridge \
     --ros-args -r "${GZ_CAM_TOPIC}:=/camera/image_raw" &
 BRIDGE_PID=$!
 
+# Wait for PX4 to finish booting before sending commands
+TAKEOFF_DELAY="${TAKEOFF_DELAY:-30}"
 echo ""
-echo "All processes running. Verify with:"
+echo "Waiting ${TAKEOFF_DELAY}s for PX4 to initialize..."
+sleep "$TAKEOFF_DELAY"
+
+# Disable GCS/RC loss checks for SITL (no physical transmitter or GCS needed)
+echo "Configuring PX4 for SITL (no GCS/RC required)..."
+echo "param set COM_RCL_EXCEPT 4" > "$PX4_PIPE"
+sleep 1
+echo "param set NAV_RCL_ACT 0" > "$PX4_PIPE"
+sleep 1
+echo "param set NAV_DLL_ACT 0" > "$PX4_PIPE"
+sleep 2
+
+# Command the drone to take off and hover
+echo "Sending takeoff command..."
+echo "commander takeoff" > "$PX4_PIPE"
+
+echo ""
+echo "All processes running. Drone should be taking off."
+echo "Verify with:"
 echo "  ros2 topic list"
 echo "  ros2 topic hz /camera/image_raw"
 echo ""
+echo "To send more PX4 commands:  echo 'commander land' > $PX4_PIPE"
 echo "Press Ctrl+C to stop everything."
 
 wait

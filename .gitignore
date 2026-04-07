@@ -4,6 +4,7 @@ Thumbs.db
 
 # Per-developer config
 config.env
+.claude/
 CLAUDE.md
 
 # IDEs / editors
