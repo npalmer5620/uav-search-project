@@ -63,3 +63,5 @@ lib/
 *.bag
 *.mcap
 *.db3
+*.pt
+*.onnx
