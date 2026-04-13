@@ -1,0 +1,44 @@
+# Keep the Docker build context small.
+# Anything not needed to BUILD the image belongs here.
+
+# Colcon outputs — these are bind-mounted at runtime, never copied in
+build/
+install/
+log/
+
+# Git metadata
+.git/
+.gitignore
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+
+# Per-developer config (container uses config.env.docker)
+config.env
+
+# Model weights — pre-fetched inside the image instead
+*.pt
+*.onnx
+
+# Rosbags
+*.db3
+*.bag
+
+# Python junk
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+
+# PX4 — cloned fresh inside the image at a pinned ref
+PX4-Autopilot/
+
+# Gazebo cache
+.gazebo/
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -1,0 +1,79 @@
+# docker compose up -d         -> starts sim headless, foxglove bridge on :8765
+# docker compose logs -f sim   -> follow PX4 / Gazebo / ROS / Foxglove logs
+# docker compose logs -f detection -> follow YOLO inference logs
+# docker compose exec sim bash -> shell inside the running container
+# docker compose down          -> clean shutdown
+
+services:
+  sim:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: uav-search-sim:latest
+    container_name: uav-sim
+
+    # launch_sim.bash pipes commands to PX4 via a named pipe; needs a TTY.
+    tty: true
+    stdin_open: true
+
+    # Bind-mount the repo so code edits on the host are live in the container.
+    # Build outputs go into named volumes so they don't pollute the host repo
+    # and survive container recreation.
+    volumes:
+      - ./:/workspace
+      - colcon-build:/workspace/build
+      - colcon-install:/workspace/install
+      - colcon-log:/workspace/log
+      # Persist downloaded YOLO weights across container restarts.
+      - ultralytics-cache:/root/.cache/yolo
+
+    ports:
+      - "8888:8888/udp"   # MicroXRCEAgent
+      - "8765:8765/tcp"   # foxglove_bridge WebSocket
+
+    # Start the full sim stack by default so `docker compose up -d` is enough
+    # to launch PX4 + Gazebo + ROS bridge + Foxglove. Use `docker compose exec`
+    # for an interactive shell while the sim is running.
+    command: ["bash", "-lc", "bash /workspace/scripts/launch_sim.bash"]
+
+  detection:
+    image: uav-search-sim:latest
+    container_name: uav-detection
+    depends_on:
+      - sim
+
+    tty: true
+    stdin_open: true
+
+    volumes:
+      - ./:/workspace
+      - colcon-build:/workspace/build
+      - colcon-install:/workspace/install
+      - colcon-log:/workspace/log
+      - ultralytics-cache:/root/.cache/yolo
+
+    command: ["bash", "-lc", "bash /workspace/scripts/launch_detection.bash"]
+
+  planning:
+    image: uav-search-sim:latest
+    container_name: uav-planning
+    depends_on:
+      - sim
+      - detection
+
+    tty: true
+    stdin_open: true
+
+    volumes:
+      - ./:/workspace
+      - colcon-build:/workspace/build
+      - colcon-install:/workspace/install
+      - colcon-log:/workspace/log
+
+    command: ["bash", "-lc", "bash /workspace/scripts/launch_planning.bash"]
+
+volumes:
+  colcon-build:
+  colcon-install:
+  colcon-log:
+  ultralytics-cache:

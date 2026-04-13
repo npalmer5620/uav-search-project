@@ -1,0 +1,24 @@
+mission_controller:
+  ros__parameters:
+    spiral:
+      max_radius: 20.0
+      spacing: 5.0
+      angular_speed: 0.3
+      altitude: -10.0
+    detection_confidence_threshold: 0.6
+    investigate_duration: 10.0
+    investigate_radius: 3.0
+    investigate_orbit_speed: 0.5
+    cooldown_distance: 3.0
+    max_investigations: 0
+    tracking:
+      match_distance: 2.5
+      duplicate_distance: 1.5
+      track_timeout: 1.0
+      history_size: 5
+      min_hits: 3
+      min_age: 0.5
+      min_confidence: 0.65
+    preflight_ticks: 20
+    takeoff_ticks: 150
+    timer_period: 0.1
