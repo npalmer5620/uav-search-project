@@ -130,6 +130,13 @@ RUN pip install --break-system-packages --no-cache-dir \
     && python3 -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=640, simplify=False)"
 
 # ---------------------------------------------------------------------------
+# 5b. Increase PX4 Gazebo world startup timeout (default 30s is too short for
+#     first launch when Gazebo downloads assets / compiles shaders).
+# ---------------------------------------------------------------------------
+RUN sed -i 's/^ATTEMPTS=30$/ATTEMPTS=${PX4_GZ_WORLD_STARTUP_TIMEOUT:-120}/' \
+        /opt/px4-gazebo/etc/init.d-posix/px4-rc.gzsim
+
+# ---------------------------------------------------------------------------
 # 6. Workspace + entrypoint
 # ---------------------------------------------------------------------------
 # /workspace is where the host repo gets bind-mounted at runtime. Nothing
