@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 """Detection-reactive mission controller.
 
-Runs a spiral search pattern by default.  When a 3-D detection arrives above
-the confidence threshold, the drone pauses the spiral, orbits (or hovers over)
-the target for a configurable duration, then resumes the search.
+Runs a grid (boustrophedon) search pattern.  When a 3-D detection arrives
+above the confidence threshold, the drone pauses the grid, spirals around the
+target to refine position and filter false positives, then resumes the search.
 
-This node is the **sole publisher** to PX4 trajectory topics — the spiral
+This node is the **sole publisher** to PX4 trajectory topics — the grid
 generator is imported as a library, not a separate ROS node.
 """
 
 from collections import deque
 from dataclasses import dataclass, field
 import math
+import os
 from enum import Enum, auto
+import socket
 from statistics import fmean, median
+import time
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 from rclpy.qos import (
@@ -35,6 +39,7 @@ from std_msgs.msg import String
 from vision_msgs.msg import Detection3DArray
 from visualization_msgs.msg import Marker, MarkerArray
 
+from uav_planning.grid_generator import GridGenerator
 from uav_planning.spiral_generator import SpiralGenerator
 
 
@@ -92,7 +97,9 @@ class TrackedTarget:
 
 class Phase(Enum):
     PREFLIGHT = auto()
+    ARMING = auto()
     TAKEOFF = auto()
+    HANDOFF = auto()
     SEARCH = auto()
     INVESTIGATE = auto()
     RTH = auto()
@@ -102,21 +109,39 @@ class Phase(Enum):
 
 class MissionController(Node):
 
+    @staticmethod
+    def _default_shell_takeoff_enabled() -> bool:
+        env_value = os.getenv("USE_PX4_SHELL_TAKEOFF")
+        if env_value is not None:
+            return env_value.strip().lower() in {"1", "true", "yes", "on"}
+        return os.path.exists("/.dockerenv")
+
+    @staticmethod
+    def _default_px4_command_host() -> str:
+        env_value = os.getenv("PX4_COMMAND_HOST")
+        if env_value:
+            return env_value
+        return "sim" if os.path.exists("/.dockerenv") else "127.0.0.1"
+
     def __init__(self) -> None:
         super().__init__("mission_controller")
 
         # -- Parameters ----------------------------------------------------------
-        # Spiral
-        self.declare_parameter("spiral.max_radius", 20.0)
-        self.declare_parameter("spiral.spacing", 5.0)
-        self.declare_parameter("spiral.angular_speed", 0.3)
-        self.declare_parameter("spiral.altitude", -10.0)
+        # Grid search
+        self.declare_parameter("grid.width", 40.0)
+        self.declare_parameter("grid.height", 40.0)
+        self.declare_parameter("grid.spacing", 5.0)
+        self.declare_parameter("grid.speed", 2.0)
+        self.declare_parameter("grid.altitude", -10.0)
+        self.declare_parameter("grid.origin_x", 0.0)
+        self.declare_parameter("grid.origin_y", 0.0)
 
         # Investigation behaviour
         self.declare_parameter("detection_confidence_threshold", 0.6)
         self.declare_parameter("investigate_duration", 10.0)
         self.declare_parameter("investigate_radius", 3.0)
-        self.declare_parameter("investigate_orbit_speed", 0.5)
+        self.declare_parameter("investigate_spiral_spacing", 1.0)
+        self.declare_parameter("investigate_spiral_speed", 0.5)
         self.declare_parameter("cooldown_distance", 3.0)
         self.declare_parameter("max_investigations", 0)  # 0 = unlimited
         self.declare_parameter("tracking.match_distance", 2.5)
@@ -127,16 +152,45 @@ class MissionController(Node):
         self.declare_parameter("tracking.min_age", 0.5)
         self.declare_parameter("tracking.min_confidence", 0.65)
 
+        # Takeoff stability
+        self.declare_parameter("takeoff_altitude_tolerance", 0.5)  # metres
+        self.declare_parameter("takeoff_velocity_tolerance", 0.3)  # m/s
+        self.declare_parameter("takeoff_stable_ticks", 20)  # consecutive stable ticks required
+        self.declare_parameter("takeoff_handoff_altitude", -2.5)  # metres in NED
+        self.declare_parameter(
+            "takeoff_timeout_proceed_altitude_tolerance", 1.0
+        )  # metres
+        self.declare_parameter("offboard_handoff_ticks", 10)
+        self.declare_parameter("preflight_settle_ticks", 0)
+        self.declare_parameter("shell_takeoff_arm_delay", 5.0)
+        self.declare_parameter("takeoff_timeout_seconds", 60.0)
+        self.declare_parameter("handoff_timeout_seconds", 60.0)
+        self.declare_parameter(
+            "use_px4_shell_takeoff",
+            self._default_shell_takeoff_enabled(),
+        )
+        self.declare_parameter(
+            "px4_command_host",
+            self._default_px4_command_host(),
+        )
+        self.declare_parameter("px4_command_port", 14600)
+        self.declare_parameter("px4_command_timeout", 1.0)
+
         # Timing
         self.declare_parameter("preflight_ticks", 20)
         self.declare_parameter("takeoff_ticks", 150)
         self.declare_parameter("timer_period", 0.1)
 
         # Read parameters
-        max_radius = float(self.get_parameter("spiral.max_radius").value)
-        spacing = float(self.get_parameter("spiral.spacing").value)
-        angular_speed = float(self.get_parameter("spiral.angular_speed").value)
-        altitude = float(self.get_parameter("spiral.altitude").value)
+        grid_width = float(self.get_parameter("grid.width").value)
+        grid_height = float(self.get_parameter("grid.height").value)
+        grid_spacing = float(self.get_parameter("grid.spacing").value)
+        grid_speed = float(self.get_parameter("grid.speed").value)
+        grid_altitude = float(self.get_parameter("grid.altitude").value)
+        grid_origin_x = float(self.get_parameter("grid.origin_x").value)
+        grid_origin_y = float(self.get_parameter("grid.origin_y").value)
+
+        self.search_altitude = grid_altitude
 
         self.confidence_threshold = float(
             self.get_parameter("detection_confidence_threshold").value
@@ -147,8 +201,11 @@ class MissionController(Node):
         self.investigate_radius = float(
             self.get_parameter("investigate_radius").value
         )
-        self.investigate_orbit_speed = float(
-            self.get_parameter("investigate_orbit_speed").value
+        self.investigate_spiral_spacing = float(
+            self.get_parameter("investigate_spiral_spacing").value
+        )
+        self.investigate_spiral_speed = float(
+            self.get_parameter("investigate_spiral_speed").value
         )
         self.cooldown_distance = float(
             self.get_parameter("cooldown_distance").value
@@ -177,12 +234,71 @@ class MissionController(Node):
         self.tracking_min_confidence = float(
             self.get_parameter("tracking.min_confidence").value
         )
+        self.takeoff_alt_tol = float(
+            self.get_parameter("takeoff_altitude_tolerance").value
+        )
+        self.takeoff_vel_tol = float(
+            self.get_parameter("takeoff_velocity_tolerance").value
+        )
+        self.takeoff_stable_required = int(
+            self.get_parameter("takeoff_stable_ticks").value
+        )
+        self.takeoff_handoff_altitude = float(
+            self.get_parameter("takeoff_handoff_altitude").value
+        )
+        self.takeoff_timeout_proceed_alt_tol = float(
+            self.get_parameter("takeoff_timeout_proceed_altitude_tolerance").value
+        )
+        self.offboard_handoff_ticks = int(
+            self.get_parameter("offboard_handoff_ticks").value
+        )
+        self.preflight_settle_ticks = int(
+            self.get_parameter("preflight_settle_ticks").value
+        )
+        self.shell_takeoff_arm_delay_s = max(
+            0.0,
+            float(self.get_parameter("shell_takeoff_arm_delay").value),
+        )
+        self.takeoff_timeout_s = max(
+            0.1,
+            float(self.get_parameter("takeoff_timeout_seconds").value),
+        )
+        self.handoff_timeout_s = max(
+            0.1,
+            float(self.get_parameter("handoff_timeout_seconds").value),
+        )
+        self.use_px4_shell_takeoff = bool(
+            self.get_parameter("use_px4_shell_takeoff").value
+        )
+        self.px4_command_host = str(
+            self.get_parameter("px4_command_host").value
+        ).strip()
+        self.px4_command_port = int(
+            self.get_parameter("px4_command_port").value
+        )
+        self.px4_command_timeout = float(
+            self.get_parameter("px4_command_timeout").value
+        )
         self.preflight_ticks = int(self.get_parameter("preflight_ticks").value)
         self.takeoff_ticks = int(self.get_parameter("takeoff_ticks").value)
         self.dt = float(self.get_parameter("timer_period").value)
+        if self.dt > 0.0:
+            self.shell_takeoff_arm_delay_ticks = max(
+                0,
+                int(math.ceil(self.shell_takeoff_arm_delay_s / self.dt)),
+            )
+        else:
+            self.shell_takeoff_arm_delay_ticks = 0
 
-        # -- Spiral generator ----------------------------------------------------
-        self.spiral = SpiralGenerator(max_radius, spacing, angular_speed, altitude)
+        # -- Grid generator ------------------------------------------------------
+        self.grid = GridGenerator(
+            width=grid_width,
+            height=grid_height,
+            spacing=grid_spacing,
+            speed=grid_speed,
+            altitude=grid_altitude,
+            origin=(grid_origin_x, grid_origin_y),
+        )
 
         # -- PX4 QoS -------------------------------------------------------------
         qos_pub = QoSProfile(
@@ -197,6 +313,12 @@ class MissionController(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
         )
+        qos_cmd = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
 
         # -- PX4 publishers ------------------------------------------------------
         self.offboard_mode_pub = self.create_publisher(
@@ -206,7 +328,7 @@ class MissionController(Node):
             TrajectorySetpoint, "/fmu/in/trajectory_setpoint", qos_pub
         )
         self.vehicle_command_pub = self.create_publisher(
-            VehicleCommand, "/fmu/in/vehicle_command", qos_pub
+            VehicleCommand, "/fmu/in/vehicle_command", qos_cmd
         )
 
         # -- PX4 subscribers -----------------------------------------------------
@@ -235,11 +357,26 @@ class MissionController(Node):
         self.event_pub = self.create_publisher(String, "~/events", 10)
 
         # -- State ---------------------------------------------------------------
-        self.phase = Phase.PREFLIGHT
+        self._phase = Phase.PREFLIGHT
         self.local_pos = VehicleLocalPosition()
         self.vehicle_status = VehicleStatus()
         self.tick = 0
+        self.preflight_ready_tick: int | None = None
+        self.arming_tick: int = 0
+        self.arm_ready_tick: int | None = None
+        self.takeoff_start_tick: int = 0
+        self.takeoff_start_time: float = 0.0
+        self.handoff_start_tick: int = 0
+        self.handoff_start_time: float = 0.0
+        self.takeoff_stable_count = 0
         self.cruise_altitude: float | None = None
+        self.handoff_hold_xy: tuple[float, float] | None = None
+        self.shell_takeoff_requested = False
+        self.arm_retry_ticks = 10
+        self.takeoff_retry_ticks = 20
+        self.offboard_retry_ticks = 10
+        self.command_burst_count = 10
+        self.command_burst_delay_s = 0.05
 
         # Investigation state
         self.investigate_target: tuple[float, float, float] | None = None  # NED
@@ -247,8 +384,8 @@ class MissionController(Node):
         self.investigate_class: str = ""
         self.investigate_confidence: float = 0.0
         self.investigate_start_time = None
-        self.investigate_orbit_theta = 0.0
-        self.investigate_orbit_active = False
+        self.investigate_spiral: SpiralGenerator | None = None
+        self.investigate_approaching = False
         # Each entry: (ned_x, ned_y, enu_x, enu_y, enu_z, class_name, confidence)
         self.investigated_locations: list[tuple[float, float, float, float, float, str, float]] = []
         self.investigation_count = 0
@@ -258,12 +395,30 @@ class MissionController(Node):
         self.timer = self.create_timer(self.dt, self._timer_cb)
 
         self.get_logger().info(
-            f"MissionController ready — spiral max_radius={max_radius}, "
+            f"MissionController ready — grid {grid_width}x{grid_height}m, "
+            f"spacing={grid_spacing}m, speed={grid_speed}m/s, "
             f"confidence_threshold={self.confidence_threshold}, "
             f"investigate_duration={self.investigate_duration}s, "
             f"tracking_min_hits={self.tracking_min_hits}, "
-            f"tracking_min_confidence={self.tracking_min_confidence}"
+            f"tracking_min_confidence={self.tracking_min_confidence}, "
+            f"takeoff_mode={'px4_shell' if self.use_px4_shell_takeoff else 'vehicle_command'}, "
+            f"shell_takeoff_arm_delay={self.shell_takeoff_arm_delay_s:.1f}s, "
+            f"takeoff_timeout={self.takeoff_timeout_s:.1f}s, "
+            f"handoff_timeout={self.handoff_timeout_s:.1f}s, "
+            "timing_source=ros_clock"
         )
+
+    # -- Phase property (logs transitions) ---------------------------------------
+
+    @property
+    def phase(self) -> Phase:
+        return self._phase
+
+    @phase.setter
+    def phase(self, new: Phase) -> None:
+        if new != self._phase:
+            self.get_logger().info(f"Phase: {self._phase.name} -> {new.name}")
+        self._phase = new
 
     # -- Callbacks ---------------------------------------------------------------
 
@@ -294,6 +449,11 @@ class MissionController(Node):
 
     def _now_seconds(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
+
+    def _elapsed_seconds(self, start_time_s: float) -> float:
+        if start_time_s <= 0.0:
+            return 0.0
+        return max(0.0, self._now_seconds() - start_time_s)
 
     def _extract_observations(self, msg: Detection3DArray) -> list[DetectionObservation]:
         observations: list[DetectionObservation] = []
@@ -462,8 +622,14 @@ class MissionController(Node):
         self.investigate_class = track.class_name
         self.investigate_confidence = track.mean_confidence
         self.investigate_start_time = self.get_clock().now()
-        self.investigate_orbit_theta = 0.0
-        self.investigate_orbit_active = False
+        self.investigate_approaching = True
+        # Create a small spiral for the investigation pass
+        self.investigate_spiral = SpiralGenerator(
+            max_radius=self.investigate_radius,
+            spacing=self.investigate_spiral_spacing,
+            angular_speed=self.investigate_spiral_speed,
+            altitude=self.search_altitude,
+        )
         self.phase = Phase.INVESTIGATE
         self.tracked_targets.clear()
 
@@ -486,31 +652,129 @@ class MissionController(Node):
     def _publish_setpoint(self, x: float, y: float, z: float, yaw: float) -> None:
         msg = TrajectorySetpoint()
         msg.position = [float(x), float(y), float(z)]
+        msg.velocity = [float("nan")] * 3
+        msg.acceleration = [float("nan")] * 3
+        msg.jerk = [float("nan")] * 3
         msg.yaw = float(yaw)
+        msg.yawspeed = float("nan")
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.trajectory_pub.publish(msg)
 
-    def _send_command(self, command: int, param1: float = 0.0, param2: float = 0.0) -> None:
+    def _send_command(
+        self,
+        command: int,
+        *,
+        from_external: bool = True,
+        param1: float = 0.0,
+        param2: float = 0.0,
+        param3: float = 0.0,
+        param4: float = 0.0,
+        param5: float = 0.0,
+        param6: float = 0.0,
+        param7: float = 0.0,
+    ) -> None:
         msg = VehicleCommand()
         msg.command = command
         msg.param1 = float(param1)
         msg.param2 = float(param2)
+        msg.param3 = float(param3)
+        msg.param4 = float(param4)
+        msg.param5 = float(param5)
+        msg.param6 = float(param6)
+        msg.param7 = float(param7)
         msg.target_system = 1
         msg.target_component = 1
         msg.source_system = 1
         msg.source_component = 1
-        msg.from_external = True
-        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        self.vehicle_command_pub.publish(msg)
+        msg.from_external = from_external
+        for _ in range(self.command_burst_count):
+            msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
+            self.vehicle_command_pub.publish(msg)
+            if self.command_burst_delay_s > 0.0:
+                time.sleep(self.command_burst_delay_s)
 
     def _arm(self) -> None:
-        self._send_command(VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
+        self._send_command(
+            VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM,
+            from_external=False,
+            param1=1.0,
+        )
 
     def _engage_offboard(self) -> None:
-        self._send_command(VehicleCommand.VEHICLE_CMD_DO_SET_MODE, param1=1.0, param2=6.0)
+        self._send_command(
+            VehicleCommand.VEHICLE_CMD_DO_SET_MODE,
+            param1=1.0,
+            param2=6.0,
+        )
 
     def _land(self) -> None:
-        self._send_command(VehicleCommand.VEHICLE_CMD_NAV_LAND)
+        self._send_command(
+            VehicleCommand.VEHICLE_CMD_NAV_LAND,
+            from_external=False,
+        )
+
+    def _is_armed(self) -> bool:
+        return self.vehicle_status.arming_state == VehicleStatus.ARMING_STATE_ARMED
+
+    def _is_offboard(self) -> bool:
+        return self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD
+
+    def _has_takeoff_reference(self) -> bool:
+        return (
+            self.local_pos.xy_valid
+            and self.local_pos.z_valid
+            and self.local_pos.xy_global
+            and self.local_pos.z_global
+            and math.isfinite(self.local_pos.ref_lat)
+            and math.isfinite(self.local_pos.ref_lon)
+            and math.isfinite(self.local_pos.ref_alt)
+        )
+
+    def _native_takeoff_target_altitude(self) -> float:
+        return max(self.search_altitude, self.takeoff_handoff_altitude)
+
+    def _send_native_takeoff(self) -> tuple[float, float]:
+        target_altitude = self._native_takeoff_target_altitude()
+        target_amsl = float(self.local_pos.ref_alt - target_altitude)
+        self._send_command(
+            VehicleCommand.VEHICLE_CMD_NAV_TAKEOFF,
+            from_external=False,
+            param5=float(self.local_pos.ref_lat),
+            param6=float(self.local_pos.ref_lon),
+            param7=target_amsl,
+        )
+        return target_altitude, target_amsl
+
+    def _send_px4_shell_command(self, command: str) -> bool:
+        command = command.strip()
+        if not command:
+            return False
+
+        try:
+            with socket.create_connection(
+                (self.px4_command_host, self.px4_command_port),
+                timeout=self.px4_command_timeout,
+            ) as sock:
+                sock.sendall((command + "\n").encode("utf-8"))
+        except OSError as exc:
+            self.get_logger().error(
+                f"Failed to send PX4 shell command '{command}': {exc}"
+            )
+            return False
+
+        return True
+
+    def _current_yaw(self) -> float:
+        if math.isfinite(self.local_pos.heading):
+            return float(self.local_pos.heading)
+        return 0.0
+
+    def _px4_time_us(self) -> int:
+        if getattr(self.local_pos, "timestamp", 0) > 0:
+            return int(self.local_pos.timestamp)
+        if getattr(self.vehicle_status, "timestamp", 0) > 0:
+            return int(self.vehicle_status.timestamp)
+        return 0
 
     # -- Visualization ----------------------------------------------------------
 
@@ -677,7 +941,7 @@ class MissionController(Node):
         drone_state.color.a = 0.95
         state_detail = self.phase.name
         if self.phase == Phase.SEARCH:
-            state_detail += f" {self.spiral.progress:.0%}"
+            state_detail += f" {self.grid.progress:.0%}"
         elif self.phase == Phase.INVESTIGATE:
             state_detail += f" ({self.investigate_class})"
         drone_state.text = state_detail
@@ -688,7 +952,13 @@ class MissionController(Node):
     # -- Main loop ---------------------------------------------------------------
 
     def _timer_cb(self) -> None:
-        self._publish_offboard_mode()
+        if self.phase in (
+            Phase.HANDOFF,
+            Phase.SEARCH,
+            Phase.INVESTIGATE,
+            Phase.RTH,
+        ):
+            self._publish_offboard_mode()
 
         # Publish state for observability
         state_msg = String()
@@ -696,44 +966,367 @@ class MissionController(Node):
         self.state_pub.publish(state_msg)
 
         if self.phase == Phase.PREFLIGHT:
-            self._publish_setpoint(0.0, 0.0, self.spiral.altitude, 0.0)
-            if self.tick == self.preflight_ticks:
-                self._engage_offboard()
-            if self.tick == self.preflight_ticks + 5:
-                self._arm()
-                self.phase = Phase.TAKEOFF
+            # Wait for PX4 to pass all preflight checks before starting the
+            # takeoff sequence. Native vehicle-command takeoff additionally
+            # requires a valid global reference.
+            if self.tick < self.preflight_ticks:
+                pass
+            elif not self.vehicle_status.pre_flight_checks_pass:
+                self.preflight_ready_tick = None
+                if self.tick % 50 == 0:
+                    self.get_logger().info("Waiting for PX4 preflight checks...")
+            elif (
+                not self.use_px4_shell_takeoff
+                and not self._has_takeoff_reference()
+            ):
+                self.preflight_ready_tick = None
+                if self.tick % 50 == 0:
+                    self.get_logger().info(
+                        "Waiting for PX4 global position reference for native takeoff..."
+                    )
+            else:
+                if self.preflight_ready_tick is None:
+                    self.preflight_ready_tick = self.tick
+
+                settle_ticks = self.preflight_settle_ticks if self.use_px4_shell_takeoff else 0
+                ticks_ready = self.tick - self.preflight_ready_tick
+                if ticks_ready < settle_ticks:
+                    if ticks_ready == 0 or ticks_ready % 50 == 0:
+                        remaining_s = (settle_ticks - ticks_ready) * self.dt
+                        self.get_logger().info(
+                            "PX4 preflight checks passed — waiting "
+                            f"{remaining_s:.0f}s for estimator settle before takeoff"
+                        )
+                else:
+                    self.get_logger().info(
+                        "PX4 preflight checks passed — starting "
+                        f"{'PX4 shell' if self.use_px4_shell_takeoff else 'native'} takeoff sequence"
+                    )
+                    self.phase = Phase.ARMING
+                    self.arming_tick = self.tick
+                    self.arm_ready_tick = None
+                    self.shell_takeoff_requested = False
+
+        elif self.phase == Phase.ARMING:
+            if self._is_armed():
+                if self.arm_ready_tick is None:
+                    self.arm_ready_tick = self.tick
+
+                if self.use_px4_shell_takeoff:
+                    ticks_armed = self.tick - self.arm_ready_tick
+                    if ticks_armed < self.shell_takeoff_arm_delay_ticks:
+                        if ticks_armed == 0 or ticks_armed % 10 == 0:
+                            remaining_s = (
+                                self.shell_takeoff_arm_delay_ticks - ticks_armed
+                            ) * self.dt
+                            self.get_logger().info(
+                                "PX4 armed — waiting "
+                                f"{remaining_s:.1f}s before shell takeoff"
+                            )
+                    elif not self.shell_takeoff_requested:
+                        if not self._send_px4_shell_command("commander takeoff"):
+                            event = (
+                                "Failed to send PX4 shell takeoff command; aborting mission."
+                            )
+                            self._publish_event(event)
+                            self.get_logger().error(event)
+                            self.phase = Phase.LAND
+                        else:
+                            target_altitude = self._native_takeoff_target_altitude()
+                            self.get_logger().info(
+                                "PX4 armed — requesting PX4 shell takeoff to "
+                                f"{target_altitude:.2f}m handoff altitude"
+                            )
+                            self.shell_takeoff_requested = True
+                            self.phase = Phase.TAKEOFF
+                            self.takeoff_start_tick = self.tick
+                            self.takeoff_start_time = self._now_seconds()
+                            self.takeoff_stable_count = 0
+                else:
+                    target_altitude, target_amsl = self._send_native_takeoff()
+                    self.get_logger().info(
+                        "PX4 armed — requesting native takeoff to "
+                        f"{target_altitude:.2f}m (AMSL {target_amsl:.2f}m)"
+                    )
+                    self.phase = Phase.TAKEOFF
+                    self.takeoff_start_tick = self.tick
+                    self.takeoff_start_time = self._now_seconds()
+                    self.takeoff_stable_count = 0
+            else:
+                self.arm_ready_tick = None
+                if (
+                    self.tick == self.arming_tick
+                    or (self.tick - self.arming_tick) % self.arm_retry_ticks == 0
+                ):
+                    if self.use_px4_shell_takeoff:
+                        if self._send_px4_shell_command("commander arm -f"):
+                            if self.tick == self.arming_tick:
+                                self.get_logger().info("PX4 shell arm command sent")
+                    else:
+                        self._arm()
+                        if self.tick == self.arming_tick:
+                            self.get_logger().info("Arm command sent")
+
+                arming_timeout_ticks = self.takeoff_ticks
+                if self.use_px4_shell_takeoff:
+                    arming_timeout_ticks += self.shell_takeoff_arm_delay_ticks
+
+                if self.tick >= self.arming_tick + arming_timeout_ticks:
+                    event = (
+                        "Failed to arm PX4 for "
+                        f"{'shell' if self.use_px4_shell_takeoff else 'native'} takeoff; "
+                        "aborting mission."
+                    )
+                    self._publish_event(event)
+                    self.get_logger().error(event)
+                    self.phase = Phase.LAND
 
         elif self.phase == Phase.TAKEOFF:
-            self._publish_setpoint(0.0, 0.0, self.spiral.altitude, 0.0)
-            if self.tick >= self.preflight_ticks + self.takeoff_ticks:
-                self.cruise_altitude = self.local_pos.z
-                self.get_logger().info(f"Locked altitude: {self.cruise_altitude:.2f}")
+            target_altitude = self._native_takeoff_target_altitude()
+            elapsed_takeoff_s = self._elapsed_seconds(self.takeoff_start_time)
+
+            # Wait for PX4's native takeoff to get the vehicle cleanly airborne
+            # before switching into offboard-controlled climb/search.
+            alt_error = abs(self.local_pos.z - target_altitude)
+            vz = abs(self.local_pos.vz)
+            at_altitude = alt_error < self.takeoff_alt_tol
+            velocity_settled = vz < self.takeoff_vel_tol
+
+            if at_altitude and velocity_settled:
+                self.takeoff_stable_count += 1
+            else:
+                self.takeoff_stable_count = 0
+
+            # Periodic takeoff telemetry (every 2s)
+            if self.tick % 20 == 0:
+                ticks_in_takeoff = self.tick - self.takeoff_start_tick
+                self.get_logger().info(
+                    f"TAKEOFF {'shell' if self.use_px4_shell_takeoff else 'native'} "
+                    f"z={self.local_pos.z:.2f}m target={target_altitude:.2f}m "
+                    f"vz={self.local_pos.vz:.2f}m/s nav_state={self.vehicle_status.nav_state} "
+                    f"stable={self.takeoff_stable_count}/{self.takeoff_stable_required} "
+                    f"tick={ticks_in_takeoff}/{self.takeoff_ticks} "
+                    f"elapsed={elapsed_takeoff_s:.1f}/{self.takeoff_timeout_s:.1f}s"
+                )
+
+            if self.takeoff_stable_count >= self.takeoff_stable_required:
+                self.handoff_hold_xy = (
+                    float(self.local_pos.x),
+                    float(self.local_pos.y),
+                )
+                self.get_logger().info(
+                    f"{'PX4 shell' if self.use_px4_shell_takeoff else 'Native'} takeoff complete — reached handoff altitude "
+                    f"{target_altitude:.2f}m, preparing offboard takeover"
+                )
+                self.phase = Phase.HANDOFF
+                self.handoff_start_tick = self.tick
+                self.handoff_start_time = self._now_seconds()
+                self.takeoff_stable_count = 0
+            else:
+                ticks_in_takeoff = self.tick - self.takeoff_start_tick
+                if self.use_px4_shell_takeoff:
+                    if (
+                        ticks_in_takeoff > 0
+                        and ticks_in_takeoff % self.takeoff_retry_ticks == 0
+                        and self._is_armed()
+                        and self.vehicle_status.nav_state
+                        != VehicleStatus.NAVIGATION_STATE_AUTO_TAKEOFF
+                        and self.vehicle_status.takeoff_time == 0
+                        and self.local_pos.z > target_altitude + self.takeoff_alt_tol
+                    ):
+                        if self._send_px4_shell_command("commander takeoff"):
+                            self.get_logger().warn(
+                                "Retrying PX4 shell takeoff command"
+                            )
+                elif (
+                    ticks_in_takeoff > 0
+                    and ticks_in_takeoff % self.takeoff_retry_ticks == 0
+                    and self._is_armed()
+                    and self.vehicle_status.takeoff_time == 0
+                    and self._has_takeoff_reference()
+                ):
+                    _target_altitude, target_amsl = self._send_native_takeoff()
+                    self.get_logger().warn(
+                        "Retrying native takeoff request toward AMSL "
+                        f"{target_amsl:.2f}m"
+                    )
+
+            if (
+                self.phase == Phase.TAKEOFF
+                and self.takeoff_start_time > 0.0
+                and elapsed_takeoff_s >= self.takeoff_timeout_s
+            ):
+                event = (
+                    f"{'PX4 shell' if self.use_px4_shell_takeoff else 'Native'} takeoff failed to reach handoff altitude; aborting mission "
+                    f"at z={self.local_pos.z:.2f}m "
+                    f"(target={target_altitude:.2f}m, alt_error={alt_error:.2f}m, "
+                    f"vz={vz:.2f}m/s)"
+                )
+                self._publish_event(event)
+                self.get_logger().error(event)
+                self.phase = Phase.LAND
+
+        elif self.phase == Phase.HANDOFF:
+            if self.handoff_hold_xy is None:
+                self.handoff_hold_xy = (
+                    float(self.local_pos.x),
+                    float(self.local_pos.y),
+                )
+
+            elapsed_handoff_s = self._elapsed_seconds(self.handoff_start_time)
+
+            hold_x, hold_y = self.handoff_hold_xy
+            self._publish_setpoint(
+                hold_x,
+                hold_y,
+                self.search_altitude,
+                self._current_yaw(),
+            )
+
+            ticks_in_handoff = self.tick - self.handoff_start_tick
+            if (
+                ticks_in_handoff >= self.offboard_handoff_ticks
+                and not self._is_offboard()
+                and ticks_in_handoff % self.offboard_retry_ticks == 0
+            ):
+                self._engage_offboard()
+                if ticks_in_handoff == self.offboard_handoff_ticks:
+                    self.get_logger().info(
+                        "Takeoff complete — requesting offboard takeover"
+                    )
+
+            alt_error = abs(self.local_pos.z - self.search_altitude)
+            vz = abs(self.local_pos.vz)
+            at_altitude = alt_error < self.takeoff_alt_tol
+            velocity_settled = vz < self.takeoff_vel_tol
+
+            if self._is_offboard() and at_altitude and velocity_settled:
+                self.takeoff_stable_count += 1
+            else:
+                self.takeoff_stable_count = 0
+
+            if self.tick % 20 == 0:
+                self.get_logger().info(
+                    f"HANDOFF z={self.local_pos.z:.2f}m target={self.search_altitude:.2f}m "
+                    f"vz={self.local_pos.vz:.2f}m/s nav_state={self.vehicle_status.nav_state} "
+                    f"stable={self.takeoff_stable_count}/{self.takeoff_stable_required} "
+                    f"tick={ticks_in_handoff}/{self.takeoff_ticks} "
+                    f"elapsed={elapsed_handoff_s:.1f}/{self.handoff_timeout_s:.1f}s"
+                )
+
+            if self._is_offboard() and self.takeoff_stable_count >= self.takeoff_stable_required:
+                self.cruise_altitude = self.search_altitude
+                self.get_logger().info(
+                    f"Offboard handoff complete — reached commanded altitude "
+                    f"{self.search_altitude:.2f}m, stable for "
+                    f"{self.takeoff_stable_required} ticks"
+                )
                 self.phase = Phase.SEARCH
+            elif (
+                self.handoff_start_time > 0.0
+                and elapsed_handoff_s >= self.handoff_timeout_s
+            ):
+                if (
+                    self._is_offboard()
+                    and
+                    alt_error <= self.takeoff_timeout_proceed_alt_tol
+                    and velocity_settled
+                ):
+                    self.cruise_altitude = self.search_altitude
+                    self.get_logger().warn(
+                        "Offboard handoff timeout reached, but altitude is close enough to "
+                        f"target to proceed safely: z={self.local_pos.z:.2f}m, "
+                        f"target={self.search_altitude:.2f}m, alt_error={alt_error:.2f}m, "
+                        f"vz={vz:.2f}m/s"
+                    )
+                    self.phase = Phase.SEARCH
+                else:
+                    event = (
+                        "Offboard handoff failed to reach mission altitude; aborting mission "
+                        f"at z={self.local_pos.z:.2f}m "
+                        f"(target={self.search_altitude:.2f}m, "
+                        f"alt_error={alt_error:.2f}m, vz={vz:.2f}m/s)"
+                    )
+                    self._publish_event(event)
+                    self.get_logger().error(event)
+                    self.phase = Phase.LAND
 
         elif self.phase == Phase.SEARCH:
-            waypoint = self.spiral.step(self.dt)
-            if waypoint is None:
+            if self.cruise_altitude is None:
+                self.get_logger().error(
+                    "SEARCH entered without a valid cruise altitude; aborting mission."
+                )
+                self.phase = Phase.LAND
+                self.tick += 1
+                return
+
+            # Only advance the grid when the drone is near the current target.
+            # This prevents the cursor from running away while the drone
+            # transits to the grid start or catches up after an investigation.
+            current = self.grid.current_position
+            if current is None:
                 self.phase = Phase.RTH
                 self.tick += 1
                 return
-            x, y, _z, yaw = waypoint
+
+            cx, cy, _cz, _cyaw = current
+            dist_to_target = math.hypot(
+                self.local_pos.x - cx, self.local_pos.y - cy
+            )
+            if dist_to_target < self.grid.spacing:
+                waypoint = self.grid.step(self.dt)
+                if waypoint is None:
+                    self.phase = Phase.RTH
+                    self.tick += 1
+                    return
+                x, y, _z, yaw = waypoint
+            else:
+                # Fly toward the current grid target without advancing
+                x, y, _z = cx, cy, _cz
+                yaw = self._yaw_from_current_position(x, y)
+
+            # Periodic search telemetry (every 5s)
+            if self.tick % 50 == 0:
+                self.get_logger().info(
+                    f"SEARCH grid={self.grid.progress:.0%} "
+                    f"pos=({self.local_pos.x:.1f},{self.local_pos.y:.1f}) "
+                    f"target=({x:.1f},{y:.1f}) dist={dist_to_target:.1f}m "
+                    f"z={self.local_pos.z:.1f}m "
+                    f"{'advancing' if dist_to_target < self.grid.spacing else 'transiting'}"
+                )
+
             self._publish_setpoint(x, y, self.cruise_altitude, yaw)
 
         elif self.phase == Phase.INVESTIGATE:
+            if self.cruise_altitude is None:
+                self.get_logger().error(
+                    "INVESTIGATE entered without a valid cruise altitude; aborting mission."
+                )
+                self.phase = Phase.LAND
+                self.tick += 1
+                return
+
             elapsed = (
                 self.get_clock().now() - self.investigate_start_time
             ).nanoseconds / 1e9
 
-            if elapsed >= self.investigate_duration:
+            spiral_done = (
+                self.investigate_spiral is not None
+                and self.investigate_spiral.complete
+            )
+            timed_out = elapsed >= self.investigate_duration
+
+            if spiral_done or timed_out:
                 tx, ty, _tz = self.investigate_target
                 ex, ey, ez = self.investigate_target_enu
                 self.investigated_locations.append(
                     (tx, ty, ex, ey, ez, self.investigate_class, self.investigate_confidence)
                 )
                 self.investigation_count += 1
+                reason = "spiral complete" if spiral_done else "timeout"
                 event = (
                     f"Investigation #{self.investigation_count} complete "
-                    f"({self.investigate_class}). Resuming spiral."
+                    f"({self.investigate_class}, {reason}). Resuming grid."
                 )
                 self._publish_event(event)
                 self.get_logger().info(event)
@@ -750,29 +1343,21 @@ class MissionController(Node):
             tx, ty, tz = self.investigate_target
             distance_to_target = math.hypot(tx - self.local_pos.x, ty - self.local_pos.y)
 
-            if self.investigate_radius > 0.0 and distance_to_target > self.investigate_radius:
-                # Approach the detection directly before starting any orbit.
-                self.investigate_orbit_active = False
+            if self.investigate_approaching and distance_to_target > self.investigate_radius:
+                # Approach the detection directly before starting the spiral
                 yaw = self._yaw_from_current_position(tx, ty)
                 self._publish_setpoint(tx, ty, self.cruise_altitude, yaw)
-            elif self.investigate_radius > 0.0:
-                # Once near the target, orbit from the current bearing instead of
-                # snapping to an arbitrary point on the circle.
-                if not self.investigate_orbit_active:
-                    self.investigate_orbit_theta = math.atan2(
-                        self.local_pos.y - ty, self.local_pos.x - tx
-                    )
-                    self.investigate_orbit_active = True
-
-                self.investigate_orbit_theta += self.investigate_orbit_speed * self.dt
-                ox = tx + self.investigate_radius * math.cos(self.investigate_orbit_theta)
-                oy = ty + self.investigate_radius * math.sin(self.investigate_orbit_theta)
-                yaw = self._yaw_from_current_position(tx, ty)
-                self._publish_setpoint(ox, oy, self.cruise_altitude, yaw)
             else:
-                # Hover directly over target
-                yaw = self._yaw_from_current_position(tx, ty)
-                self._publish_setpoint(tx, ty, self.cruise_altitude, yaw)
+                # Spiral around the target to refine position / reject false positives
+                self.investigate_approaching = False
+                wp = self.investigate_spiral.step(self.dt)
+                if wp is not None:
+                    sx, sy, _sz, _syaw = wp
+                    # Offset spiral output by target position
+                    ox = tx + sx
+                    oy = ty + sy
+                    yaw = self._yaw_from_current_position(tx, ty)
+                    self._publish_setpoint(ox, oy, self.cruise_altitude, yaw)
 
             # Publish target pose for visualization
             target_msg = PoseStamped()
@@ -788,6 +1373,14 @@ class MissionController(Node):
             self.target_pub.publish(target_msg)
 
         elif self.phase == Phase.RTH:
+            if self.cruise_altitude is None:
+                self.get_logger().error(
+                    "RTH entered without a valid cruise altitude; landing in place."
+                )
+                self.phase = Phase.LAND
+                self.tick += 1
+                return
+
             self._publish_setpoint(0.0, 0.0, self.cruise_altitude, 0.0)
             dx = self.local_pos.x
             dy = self.local_pos.y
@@ -810,11 +1403,12 @@ def main(args=None) -> None:
     node = MissionController()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

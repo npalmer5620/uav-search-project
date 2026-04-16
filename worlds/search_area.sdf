@@ -41,9 +41,7 @@
       <uri>
         https://fuel.gazebosim.org/1.0/OpenRobotics/models/Coast Water
       </uri>
-      <pose>0 0 -2 0 0 0
-        <relative_to>park</relative_to>
-      </pose>
+      <pose relative_to="park">0 0 -2 0 0 0</pose>
     </include>
     <!-- Detectable objects (COCO classes) for YOLOv11 -->
 

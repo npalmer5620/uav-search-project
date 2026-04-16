@@ -120,6 +120,13 @@ PX4_PIPE="/tmp/px4_pipe_$$"
 mkfifo "$PX4_PIPE"
 exec 3<>"$PX4_PIPE"   # hold the pipe open (read+write) so writes don't EOF PX4
 
+PX4_COMMAND_PORT="${PX4_COMMAND_PORT:-14600}"
+echo "Starting PX4 shell command bridge on port ${PX4_COMMAND_PORT}..."
+python3 "$REPO_DIR/scripts/px4_command_bridge.py" \
+    --pipe "$PX4_PIPE" \
+    --port "$PX4_COMMAND_PORT" &
+PX4_COMMAND_BRIDGE_PID=$!
+
 # Start PX4 SITL (this also launches Gazebo)
 echo "Starting PX4 SITL..."
 cd "$PX4_DIR"
@@ -170,6 +177,7 @@ cleanup() {
     [[ -n "${POSE_BRIDGE_PID}" ]] && kill "${POSE_BRIDGE_PID}" 2>/dev/null || true
     [[ -n "${FOXGLOVE_PID}" ]] && kill "${FOXGLOVE_PID}" 2>/dev/null || true
     [[ -n "${BRIDGE_PID}" ]] && kill "${BRIDGE_PID}" 2>/dev/null || true
+    [[ -n "${PX4_COMMAND_BRIDGE_PID:-}" ]] && kill "${PX4_COMMAND_BRIDGE_PID}" 2>/dev/null || true
     kill "${PX4_PID}" 2>/dev/null || true
     kill "${XRCE_PID}" 2>/dev/null || true
     exec 3>&-                          # close the pipe fd
@@ -218,9 +226,10 @@ if [[ -n "$GZ_DEPTH_TOPIC" ]]; then
         --reqtype gz.msgs.Double --reptype gz.msgs.Empty --req "data: ${CAMERA_RATE:-30}.0" --timeout 5000 || true
 fi
 
-# Start ros_gz_bridge for camera topics (GZ -> ROS only)
-echo "Starting ros_gz_bridge for camera topics..."
+# Start ros_gz_bridge for clock + camera topics (GZ -> ROS only)
+echo "Starting ros_gz_bridge for clock and camera topics..."
 BRIDGE_TOPICS=(
+    "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"
     "${GZ_CAM_TOPIC}@sensor_msgs/msg/Image[gz.msgs.Image"
     "${GZ_CAM_INFO_TOPIC}@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo"
 )
@@ -267,7 +276,7 @@ fi
 if [[ "${ENABLE_POSE_BRIDGE:-1}" == "1" ]]; then
     if python3 -c "from px4_msgs.msg import VehicleOdometry" >/dev/null 2>&1; then
         echo "Starting PX4 pose bridge for Foxglove 3D..."
-        python3 "$REPO_DIR/scripts/px4_pose_bridge.py" &
+        python3 "$REPO_DIR/scripts/px4_pose_bridge.py" --ros-args -p use_sim_time:=true &
         POSE_BRIDGE_PID=$!
     else
         echo "WARNING: px4_msgs is unavailable; skipping Foxglove pose bridge"
@@ -293,12 +302,12 @@ echo "param set NAV_DLL_ACT 0" > "$PX4_PIPE"
 echo "Waiting for PX4 health checks to pass..."
 sleep 10
 
-# Command the drone to take off and hover
-echo "Sending takeoff command..."
-echo "commander takeoff" > "$PX4_PIPE"
+# NOTE: The mission controller now uses the internal command bridge to send
+# `commander arm -f` / `commander takeoff`, then hands control back to ROS
+# offboard setpoints once the vehicle is airborne.
 
 echo ""
-echo "All processes running. Drone should be taking off."
+echo "All processes running. Mission controller will arm and take off when PX4 is ready."
 echo "Verify with:"
 echo "  ros2 topic list"
 echo "  ros2 topic hz /camera/image_raw"
@@ -310,6 +319,7 @@ if [[ "${ENABLE_FOXGLOVE:-1}" == "1" ]]; then
 fi
 echo ""
 echo "To send more PX4 commands:  echo 'commander land' > $PX4_PIPE"
+echo "Internal PX4 command bridge: sim:${PX4_COMMAND_PORT}"
 echo "Press Ctrl+C to stop everything."
 
 wait
