@@ -4,10 +4,11 @@ This directory contains everything needed to run the UAV search sim inside a Doc
 
 ## What's in the image
 
-Built from `docker/Dockerfile`, single-stage, one image reused by two Compose services:
+Built from `docker/Dockerfile`, single-stage, one image reused by three Compose services:
 
 - `sim` — PX4 SITL, Gazebo, ROS bridge, Foxglove, pose/TF helpers
 - `detection` — YOLO inference node subscribed to `/camera/image_raw` and fused with `/camera/depth/image_raw`
+- `planning` — mission controller that drives takeoff, search, and investigation
 
 - Ubuntu 24.04 (Noble) via `px4io/px4-sitl-gazebo`
 - ROS 2 Jazzy Jalisco
@@ -33,7 +34,7 @@ The repo itself is **not** baked into the image. `docker-compose.yml` bind-mount
 # Build the image
 docker compose build
 
-# Start sim + detection in the background
+# Start the full stack in the background
 docker compose up -d
 
 # Follow sim logs

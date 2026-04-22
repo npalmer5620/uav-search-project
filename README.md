@@ -38,10 +38,11 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 
 ## Quickstart (Docker &mdash; recommended)
 
-The stack runs as two Compose services built from the same Docker image:
+The stack runs as three Compose services built from the same Docker image:
 
 - `sim` — PX4 SITL, Gazebo, `ros_gz_bridge`, Foxglove, pose/TF publishers
 - `detection` — YOLOv11 inference subscribed to `/camera/image_raw` with optional depth fusion from `/camera/depth/image_raw`
+- `planning` — mission controller that arms, takes off, flies the search pattern, and investigates detections
 
 **Prerequisites:** Docker Desktop or OrbStack on macOS / Linux.
 
@@ -49,7 +50,7 @@ The stack runs as two Compose services built from the same Docker image:
 # Build the image (first time is still substantial, but PX4 itself is prebuilt)
 docker compose build
 
-# Start sim + detection in the background
+# Start the full stack in the background
 docker compose up -d
 
 # Follow sim logs
