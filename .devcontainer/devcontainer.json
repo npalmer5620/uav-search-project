@@ -1,0 +1,30 @@
+{
+  "name": "UAV Search Sim",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "sim",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  // Don't auto-build the workspace on create — PX4 is prebuilt in the image,
+  // but colcon output lives in a named volume so the first build per machine
+  // will still take a minute. Run `colcon build --symlink-install` manually.
+  "postCreateCommand": "echo 'Container ready. Run: colcon build --symlink-install && source install/setup.bash'",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-iot.vscode-ros",
+        "ms-azuretools.vscode-docker",
+        "twxs.cmake",
+        "ms-vscode.cpptools"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "python.defaultInterpreterPath": "/usr/bin/python3"
+      }
+    }
+  },
+
+  "remoteUser": "root"
+}

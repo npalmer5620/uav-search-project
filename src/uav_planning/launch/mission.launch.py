@@ -1,0 +1,91 @@
+"""Launch the mission controller (grid search + detection response)."""
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    args = [
+        DeclareLaunchArgument("grid_width", default_value="40.0",
+                              description="Grid search area width (east-west) in meters."),
+        DeclareLaunchArgument("grid_height", default_value="40.0",
+                              description="Grid search area height (north-south) in meters."),
+        DeclareLaunchArgument("grid_spacing", default_value="5.0",
+                              description="Distance between parallel passes in meters."),
+        DeclareLaunchArgument("grid_speed", default_value="2.0",
+                              description="Linear flight speed during grid search in m/s."),
+        DeclareLaunchArgument("altitude", default_value="-10.0",
+                              description="Search altitude in NED (negative = up)."),
+        DeclareLaunchArgument("grid_origin_x", default_value="0.0",
+                              description="Grid center X (North) in NED meters."),
+        DeclareLaunchArgument("grid_origin_y", default_value="0.0",
+                              description="Grid center Y (East) in NED meters."),
+        DeclareLaunchArgument("detection_confidence_threshold", default_value="0.6",
+                              description="Min confidence to trigger investigation."),
+        DeclareLaunchArgument("investigate_duration", default_value="10.0",
+                              description="Seconds to investigate each detection."),
+        DeclareLaunchArgument("investigate_radius", default_value="3.0",
+                              description="Investigation spiral max radius in meters."),
+        DeclareLaunchArgument("investigate_spiral_spacing", default_value="1.0",
+                              description="Distance between investigation spiral loops in meters."),
+        DeclareLaunchArgument("investigate_spiral_speed", default_value="0.5",
+                              description="Investigation spiral angular speed in rad/s."),
+        DeclareLaunchArgument("tracking_match_distance", default_value="2.5",
+                              description="Max 3D distance to associate detections to an existing track."),
+        DeclareLaunchArgument("tracking_duplicate_distance", default_value="1.5",
+                              description="Same-class detections within this distance are merged per frame."),
+        DeclareLaunchArgument("tracking_timeout", default_value="1.0",
+                              description="Seconds before an unseen track expires."),
+        DeclareLaunchArgument("tracking_history_size", default_value="5",
+                              description="Rolling history length used for position/confidence filtering."),
+        DeclareLaunchArgument("tracking_min_hits", default_value="3",
+                              description="Minimum updates before a track can trigger investigation."),
+        DeclareLaunchArgument("tracking_min_age", default_value="0.5",
+                              description="Minimum track age in seconds before promotion."),
+        DeclareLaunchArgument("tracking_min_confidence", default_value="0.65",
+                              description="Minimum filtered confidence before promotion."),
+        DeclareLaunchArgument("use_sim_time", default_value="true",
+                              description="Use ROS sim time from Gazebo /clock."),
+        DeclareLaunchArgument("shell_takeoff_arm_delay", default_value="5.0",
+                              description="Seconds to wait after arming before requesting PX4 shell takeoff."),
+        DeclareLaunchArgument("takeoff_timeout_seconds", default_value="60.0",
+                              description="ROS clock timeout for native or shell takeoff."),
+        DeclareLaunchArgument("handoff_timeout_seconds", default_value="60.0",
+                              description="ROS clock timeout for offboard handoff after takeoff."),
+    ]
+
+    mission_node = Node(
+        package="uav_planning",
+        executable="mission_controller",
+        name="mission_controller",
+        output="screen",
+        parameters=[{
+            "grid.width": LaunchConfiguration("grid_width"),
+            "grid.height": LaunchConfiguration("grid_height"),
+            "grid.spacing": LaunchConfiguration("grid_spacing"),
+            "grid.speed": LaunchConfiguration("grid_speed"),
+            "grid.altitude": LaunchConfiguration("altitude"),
+            "grid.origin_x": LaunchConfiguration("grid_origin_x"),
+            "grid.origin_y": LaunchConfiguration("grid_origin_y"),
+            "detection_confidence_threshold": LaunchConfiguration("detection_confidence_threshold"),
+            "investigate_duration": LaunchConfiguration("investigate_duration"),
+            "investigate_radius": LaunchConfiguration("investigate_radius"),
+            "investigate_spiral_spacing": LaunchConfiguration("investigate_spiral_spacing"),
+            "investigate_spiral_speed": LaunchConfiguration("investigate_spiral_speed"),
+            "tracking.match_distance": LaunchConfiguration("tracking_match_distance"),
+            "tracking.duplicate_distance": LaunchConfiguration("tracking_duplicate_distance"),
+            "tracking.track_timeout": LaunchConfiguration("tracking_timeout"),
+            "tracking.history_size": LaunchConfiguration("tracking_history_size"),
+            "tracking.min_hits": LaunchConfiguration("tracking_min_hits"),
+            "tracking.min_age": LaunchConfiguration("tracking_min_age"),
+            "tracking.min_confidence": LaunchConfiguration("tracking_min_confidence"),
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "shell_takeoff_arm_delay": LaunchConfiguration("shell_takeoff_arm_delay"),
+            "takeoff_timeout_seconds": LaunchConfiguration("takeoff_timeout_seconds"),
+            "handoff_timeout_seconds": LaunchConfiguration("handoff_timeout_seconds"),
+        }],
+    )
+
+    return LaunchDescription([*args, mission_node])

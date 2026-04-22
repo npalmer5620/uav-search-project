@@ -1,4 +1,4 @@
-"""Launch ros_gz_bridge to bridge Gazebo camera topics into ROS 2.
+"""Launch ros_gz_bridge to bridge Gazebo clock and camera topics into ROS 2.
 
 Use this when PX4 SITL + Gazebo are already running (e.g. via scripts/launch_sim.bash
 or manually with `make px4_sitl gz_x500_mono_cam`).

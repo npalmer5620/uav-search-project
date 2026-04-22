@@ -36,52 +36,77 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 | Object Detection| YOLOv11 (Ultralytics)          |
 | OS              | Ubuntu 24.04                   |
 
-## Prerequisites
+## Quickstart (Docker &mdash; recommended)
+
+The stack runs as three Compose services built from the same Docker image:
+
+- `sim` — PX4 SITL, Gazebo, `ros_gz_bridge`, Foxglove, pose/TF publishers
+- `detection` — YOLOv11 inference subscribed to `/camera/image_raw` with optional depth fusion from `/camera/depth/image_raw`
+- `planning` — mission controller that arms, takes off, flies the search pattern, and investigates detections
+
+**Prerequisites:** Docker Desktop or OrbStack on macOS / Linux.
+
+```bash
+# Build the image (first time is still substantial, but PX4 itself is prebuilt)
+docker compose build
+
+# Start the full stack in the background
+docker compose up -d
+
+# Follow sim logs
+docker compose logs -f sim
+
+# Follow detection logs
+docker compose logs -f detection
+
+# Open a shell inside the running sim container
+docker compose exec sim bash
+```
+
+`scripts/launch_sim.bash` starts `foxglove_bridge` and a PX4 pose bridge by default, so visualization is browser-based: open **Foxglove Studio** on the host and connect to `ws://localhost:8765`. Useful topics now include `/camera/image_raw`, `/camera/depth/image_raw`, `/camera/image_annotated`, `/detections`, `/detections_3d`, and `/detections_3d_markers`. In the 3D panel, add `/uav/drone_marker` for a visible drone pose marker and `/detections_3d_markers` for depth-localized targets.
+
+`scripts/launch_detection.bash` runs the detector directly from the bind-mounted source tree in a separate container, so code edits under [`src/uav_detection`](/Users/nicknationwide/uav-search-project/src/uav_detection) are picked up on container restart without a manual `colcon build`.
+
+See [`docker/README.md`](docker/README.md) for details (rebuilding, caching, VS Code dev container, troubleshooting).
+
+## Legacy: native / VM install
+
+The original workflow assumed Ubuntu 24.04 on bare metal or in a UTM VM. It still works but is no longer the default.
+
+<details>
+<summary>Click to expand native install instructions</summary>
+
+**Prerequisites:**
 
 - **Ubuntu 24.04**
 - **ROS 2 Jazzy** &mdash; [installation guide](https://docs.ros.org/en/jazzy/Installation.html)
 - **Gazebo Harmonic** &mdash; [installation guide](https://gazebosim.org/docs/harmonic/install)
 - **PX4 Autopilot** &mdash; [source build for SITL](https://docs.px4.io/main/en/dev_setup/building_px4.html)
 - **Micro XRCE-DDS Agent** &mdash; [setup guide](https://docs.px4.io/main/en/middleware/uxrce_dds.html)
-- **Python 3** with `ultralytics` package:
-  ```bash
-  pip install ultralytics
-  ```
+- **Python 3** with `ultralytics`: `pip install ultralytics`
 
-## Setup & Build
+**Setup & run:**
 
 ```bash
-# Clone the workspace
-mkdir -p ~/uav_ws/src
-cd ~/uav_ws/src
-git clone <this-repo> uav-search-project
-
-# Build with colcon
-cd ~/uav_ws
+# Build the workspace (repo root IS the colcon workspace)
 colcon build --symlink-install
 source install/setup.bash
-```
 
-> Packages and launch files will be added here as the project develops.
+# Per-machine config
+cp config.env.example config.env   # edit PX4_DIR etc.
 
-## Usage
-
-```bash
-# 1. Copy config and adjust for your machine
-cp config.env.example config.env
-
-# 2. Launch everything (PX4 SITL + XRCE-DDS Agent + camera bridge)
+# Launch everything
 ./scripts/launch_sim.bash
 
-# 3. In a second terminal, verify camera data
+# In a second terminal, verify
 source /opt/ros/jazzy/setup.bash
 ros2 topic hz /camera/image_raw
-
-# 4. (Optional) View camera feed
-python3 scripts/view_camera.py
+python3 scripts/view_camera.py      # optional OpenCV viewer (needs display)
 ```
 
-See `config.env.example` for available settings (render engine, world, camera rate).
+See `config.env.example` for available settings (render engine, world, camera rate). The Docker workflow overrides PX4's `mono_cam` model at launch to use a lighter `640x480` camera with sensor visualization disabled.
+
+</details>
 
 ## Project Structure
 

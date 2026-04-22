@@ -1,0 +1,38 @@
+mission_controller:
+  ros__parameters:
+    use_sim_time: true
+    grid:
+      width: 40.0
+      height: 40.0
+      spacing: 5.0
+      speed: 2.0
+      altitude: -10.0
+      origin_x: 0.0
+      origin_y: 0.0
+    detection_confidence_threshold: 0.6
+    investigate_duration: 10.0
+    investigate_radius: 3.0
+    investigate_spiral_spacing: 1.0
+    investigate_spiral_speed: 0.5
+    cooldown_distance: 3.0
+    max_investigations: 0
+    tracking:
+      match_distance: 2.5
+      duplicate_distance: 1.5
+      track_timeout: 1.0
+      history_size: 5
+      min_hits: 3
+      min_age: 0.5
+      min_confidence: 0.65
+    takeoff_altitude_tolerance: 0.5
+    takeoff_velocity_tolerance: 0.3
+    takeoff_stable_ticks: 20
+    takeoff_handoff_altitude: -2.5
+    takeoff_timeout_proceed_altitude_tolerance: 1.0
+    offboard_handoff_ticks: 10
+    shell_takeoff_arm_delay: 5.0
+    takeoff_timeout_seconds: 60.0
+    handoff_timeout_seconds: 60.0
+    preflight_ticks: 20
+    takeoff_ticks: 150
+    timer_period: 0.1

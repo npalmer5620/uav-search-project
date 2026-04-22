@@ -22,10 +22,25 @@ def generate_launch_description():
         default_value="cpu",
         description="Inference device: 'cpu' or 'cuda'.",
     )
+    imgsz_arg = DeclareLaunchArgument(
+        "imgsz",
+        default_value="640",
+        description="Inference image size passed to the detector backend.",
+    )
+    frame_skip_arg = DeclareLaunchArgument(
+        "frame_skip",
+        default_value="0",
+        description="Skip N frames between inferences (0 = process every frame).",
+    )
     publish_viz_arg = DeclareLaunchArgument(
         "publish_viz",
         default_value="true",
         description="Publish annotated image to /camera/image_annotated.",
+    )
+    publish_3d_arg = DeclareLaunchArgument(
+        "publish_3d",
+        default_value="true",
+        description="Fuse detections with depth and publish /detections_3d.",
     )
 
     detection_node = Node(
@@ -37,8 +52,14 @@ def generate_launch_description():
             "model_path":  LaunchConfiguration("model_path"),
             "confidence":  LaunchConfiguration("confidence"),
             "device":      LaunchConfiguration("device"),
+            "imgsz":       LaunchConfiguration("imgsz"),
+            "frame_skip":  LaunchConfiguration("frame_skip"),
             "image_topic": "/camera/image_raw",
+            "camera_info_topic": "/camera/camera_info",
+            "depth_topic": "/camera/depth/image_raw",
             "publish_viz": LaunchConfiguration("publish_viz"),
+            "publish_3d": LaunchConfiguration("publish_3d"),
+            "world_frame": "map",
         }],
     )
 
@@ -46,6 +67,9 @@ def generate_launch_description():
         model_path_arg,
         confidence_arg,
         device_arg,
+        imgsz_arg,
+        frame_skip_arg,
         publish_viz_arg,
+        publish_3d_arg,
         detection_node,
     ])
