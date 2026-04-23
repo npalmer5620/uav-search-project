@@ -1,0 +1,52 @@
+{
+  "candidate_artifact_summary": {
+    "config_path": "/workspace/artifacts/rl/search_policy_50k/search_policy.yaml",
+    "model_path": "/workspace/artifacts/rl/search_policy_50k/model.zip",
+    "vecnormalize_path": "/workspace/artifacts/rl/search_policy_50k/vecnormalize.pkl",
+    "progress_path": "/workspace/artifacts/rl/search_policy_50k/training_progress.jsonl",
+    "total_timesteps": 50000,
+    "num_envs": 4,
+    "evaluation": {
+      "episodes": 10,
+      "mean_reward": -2.655937499999917,
+      "success_rate": 0.0,
+      "mean_coverage": 0.06796875
+    }
+  },
+  "candidate_artifact_eval_100": {
+    "episodes": 100,
+    "mean_reward": -3.206914062499909,
+    "reward_std": 3.9904187226062033,
+    "mean_coverage": 0.0669921875,
+    "coverage_std": 0.02622356718820341,
+    "success_rate": 0.0,
+    "mean_steps": 672.0
+  },
+  "smoke_artifact_eval_100": {
+    "episodes": 100,
+    "mean_reward": -46.522251376951864,
+    "reward_std": 23.587138450577097,
+    "mean_coverage": 0.07015625,
+    "coverage_std": 0.028995428316913166,
+    "success_rate": 0.0,
+    "mean_steps": 672.0
+  },
+  "untrained_ppo_eval_100": {
+    "episodes": 100,
+    "mean_reward": -6.479087667780948,
+    "reward_std": 1.229726769661589,
+    "mean_coverage": 0.0176953125,
+    "coverage_std": 0.008014098142833588,
+    "success_rate": 0.0,
+    "mean_steps": 672.0
+  },
+  "random_policy_eval_100": {
+    "episodes": 100,
+    "mean_reward": -16.51355507032454,
+    "reward_std": 19.631428915573967,
+    "mean_coverage": 0.6697265625,
+    "coverage_std": 0.1093559902565034,
+    "success_rate": 0.48,
+    "mean_steps": 557.58
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "config_path": "/workspace/artifacts/rl/search_policy_curriculum_50k/search_policy.yaml",
+  "model_path": "/workspace/artifacts/rl/search_policy_curriculum_50k/model.zip",
+  "vecnormalize_path": "/workspace/artifacts/rl/search_policy_curriculum_50k/vecnormalize.pkl",
+  "progress_path": "/workspace/artifacts/rl/search_policy_curriculum_50k/training_progress.jsonl",
+  "total_timesteps": 50000,
+  "num_envs": 4,
+  "stages": [
+    {
+      "name": "bootstrap_small_map",
+      "index": 1,
+      "total_timesteps": 15000,
+      "env": {
+        "width": 20.0,
+        "height": 20.0,
+        "origin_x": 0.0,
+        "origin_y": 0.0,
+        "coverage_grid_side": 16,
+        "max_step_xy_m": 4.0,
+        "max_yaw_step_rad": 0.78539816339,
+        "decision_period_s": 0.5,
+        "search_speed": 2.0,
+        "target_detection_radius_m": 4.0,
+        "coverage_reward_scale": 10.0,
+        "first_target_found_bonus": 10.0,
+        "success_bonus": 50.0,
+        "step_penalty": 0.001,
+        "boundary_penalty": 0.05,
+        "timeout_penalty": 10.0,
+        "stagnation_penalty": 0.002,
+        "required_target_count": 1,
+        "max_episode_steps": 256,
+        "world_path": null
+      },
+      "evaluation": {
+        "episodes": 10,
+        "mean_reward": 50.22270120297709,
+        "success_rate": 0.9,
+        "mean_coverage": 0.03515625
+      }
+    },
+    {
+      "name": "intermediate_two_targets",
+      "index": 2,
+      "total_timesteps": 15000,
+      "env": {
+        "width": 30.0,
+        "height": 30.0,
+        "origin_x": 0.0,
+        "origin_y": 0.0,
+        "coverage_grid_side": 16,
+        "max_step_xy_m": 4.0,
+        "max_yaw_step_rad": 0.78539816339,
+        "decision_period_s": 0.5,
+        "search_speed": 2.0,
+        "target_detection_radius_m": 4.0,
+        "coverage_reward_scale": 10.0,
+        "first_target_found_bonus": 10.0,
+        "success_bonus": 50.0,
+        "step_penalty": 0.001,
+        "boundary_penalty": 0.05,
+        "timeout_penalty": 10.0,
+        "stagnation_penalty": 0.002,
+        "required_target_count": 2,
+        "max_episode_steps": 384,
+        "world_path": null
+      },
+      "evaluation": {
+        "episodes": 10,
+        "mean_reward": 41.34543312970981,
+        "success_rate": 0.7,
+        "mean_coverage": 0.12265625
+      }
+    },
+    {
+      "name": "full_task",
+      "index": 3,
+      "total_timesteps": 20000,
+      "env": {
+        "width": 40.0,
+        "height": 40.0,
+        "origin_x": 0.0,
+        "origin_y": 0.0,
+        "coverage_grid_side": 16,
+        "max_step_xy_m": 4.0,
+        "max_yaw_step_rad": 0.78539816339,
+        "decision_period_s": 0.5,
+        "search_speed": 2.0,
+        "target_detection_radius_m": 4.0,
+        "coverage_reward_scale": 10.0,
+        "first_target_found_bonus": 10.0,
+        "success_bonus": 50.0,
+        "step_penalty": 0.001,
+        "boundary_penalty": 0.05,
+        "timeout_penalty": 10.0,
+        "stagnation_penalty": 0.002,
+        "required_target_count": 5,
+        "max_episode_steps": 512,
+        "world_path": null
+      },
+      "evaluation": {
+        "episodes": 10,
+        "mean_reward": -8.435799757903478,
+        "success_rate": 0.0,
+        "mean_coverage": 0.149609375
+      }
+    }
+  ],
+  "evaluation": {
+    "episodes": 10,
+    "mean_reward": -8.435799757903478,
+    "success_rate": 0.0,
+    "mean_coverage": 0.149609375
+  }
+}

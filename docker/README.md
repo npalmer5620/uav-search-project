@@ -4,11 +4,12 @@ This directory contains everything needed to run the UAV search sim inside a Doc
 
 ## What's in the image
 
-Built from `docker/Dockerfile`, single-stage, one image reused by three Compose services:
+Built from `docker/Dockerfile`, single-stage, one image reused by the sim, detection, planning, and optional training services:
 
 - `sim` — PX4 SITL, Gazebo, ROS bridge, Foxglove, pose/TF helpers
 - `detection` — YOLO inference node subscribed to `/camera/image_raw` and fused with `/camera/depth/image_raw`
-- `planning` — mission controller that drives takeoff, search, and investigation
+- `planning` — mission controller that drives takeoff, either grid or PPO search, and investigation
+- `training` — task-level Gymnasium environment plus Stable-Baselines3 PPO training
 
 - Ubuntu 24.04 (Noble) via `px4io/px4-sitl-gazebo`
 - ROS 2 Jazzy Jalisco
@@ -17,7 +18,7 @@ Built from `docker/Dockerfile`, single-stage, one image reused by three Compose 
 - Foxglove bridge (`ros-jazzy-foxglove-bridge`) for browser-based visualization on port 8765
 - Micro XRCE-DDS Agent built from source at a pinned ref
 - PX4 SITL + Gazebo preinstalled at `/opt/px4-gazebo`
-- `ultralytics`, `opencv-python`, `numpy` via pip
+- `ultralytics`, `opencv-python`, `numpy`, `gymnasium`, `stable-baselines3`, `tensorboard`, and `pyyaml` via pip
 - `yolo11n.pt` pre-downloaded into `/root/.cache/yolo`
 
 The repo itself is **not** baked into the image. `docker-compose.yml` bind-mounts the host repo to `/workspace` so code edits on the host are live inside both containers.
@@ -43,6 +44,9 @@ docker compose logs -f sim
 # Follow detection logs
 docker compose logs -f detection
 
+# Run PPO training
+docker compose run --rm training
+
 # Open a shell inside the running sim container
 docker compose exec sim bash
 
@@ -53,6 +57,10 @@ docker compose down
 The entrypoint seeds `config.env` from `config.env.docker` on first run if the user hasn't provided their own. Override by creating a plain `config.env` on the host before starting the container.
 
 The detection container launches `scripts/launch_detection.bash`, which runs the detector directly from [`src/uav_detection`](/Users/nicknationwide/uav-search-project/src/uav_detection) using `PYTHONPATH`. That keeps iteration simple and avoids `ament_python` editable-install issues in the container runtime.
+
+The planning container launches `scripts/launch_planning.bash`, which now honors `SEARCH_POLICY=grid|rl` plus `RL_MODEL_PATH`, `RL_VECNORMALIZE_PATH`, `RL_DECISION_PERIOD_S`, `RL_MAX_STEP_XY_M`, and `RL_COVERAGE_GRID_SIDE`.
+
+The training container launches `scripts/launch_training.bash`, defaulting to [`src/uav_rl/config/search_policy.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy.yaml) and writing artifacts into [`artifacts/rl/search_policy`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy).
 
 ## Visualization (Foxglove)
 

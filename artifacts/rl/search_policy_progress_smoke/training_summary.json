@@ -1,0 +1,14 @@
+{
+  "config_path": "/workspace/artifacts/rl/search_policy_progress_smoke/search_policy.yaml",
+  "model_path": "/workspace/artifacts/rl/search_policy_progress_smoke/model.zip",
+  "vecnormalize_path": "/workspace/artifacts/rl/search_policy_progress_smoke/vecnormalize.pkl",
+  "progress_path": "/workspace/artifacts/rl/search_policy_progress_smoke/training_progress.jsonl",
+  "total_timesteps": 6144,
+  "num_envs": 4,
+  "evaluation": {
+    "episodes": 10,
+    "mean_reward": -18.98106584582386,
+    "success_rate": 0.0,
+    "mean_coverage": 0.095703125
+  }
+}

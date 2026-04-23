@@ -1,0 +1,6 @@
+{
+  "episodes": 10,
+  "mean_reward": -28.058011471556746,
+  "success_rate": 0.0,
+  "mean_coverage": 0.1171875
+}

@@ -1,0 +1,14 @@
+{
+  "config_path": "/workspace/artifacts/rl/search_policy_50k/search_policy.yaml",
+  "model_path": "/workspace/artifacts/rl/search_policy_50k/model.zip",
+  "vecnormalize_path": "/workspace/artifacts/rl/search_policy_50k/vecnormalize.pkl",
+  "progress_path": "/workspace/artifacts/rl/search_policy_50k/training_progress.jsonl",
+  "total_timesteps": 50000,
+  "num_envs": 4,
+  "evaluation": {
+    "episodes": 10,
+    "mean_reward": -2.655937499999917,
+    "success_rate": 0.0,
+    "mean_coverage": 0.06796875
+  }
+}

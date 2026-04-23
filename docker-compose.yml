@@ -72,6 +72,22 @@ services:
 
     command: ["bash", "-lc", "bash /workspace/scripts/launch_planning.bash"]
 
+  training:
+    image: uav-search-sim:latest
+    container_name: uav-training
+    profiles: ["training"]
+
+    tty: true
+    stdin_open: true
+
+    volumes:
+      - ./:/workspace
+      - colcon-build:/workspace/build
+      - colcon-install:/workspace/install
+      - colcon-log:/workspace/log
+
+    command: ["bash", "-lc", "bash /workspace/scripts/launch_training.bash"]
+
 volumes:
   colcon-build:
   colcon-install:

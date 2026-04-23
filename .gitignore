@@ -65,3 +65,6 @@ lib/
 *.db3
 *.pt
 *.onnx
+artifacts/rl/search_policy/*
+!artifacts/rl/search_policy/.gitkeep
+artifacts/rl/tensorboard/

@@ -86,7 +86,7 @@ class SearchNode(Node):
         )
         self.create_subscription(
             VehicleStatus,
-            "/fmu/out/vehicle_status_v3",
+            "/fmu/out/vehicle_status_v4",
             self._vehicle_status_cb,
             qos_sub,
         )

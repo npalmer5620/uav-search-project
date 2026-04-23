@@ -1,0 +1,3 @@
+{"eval_episodes": 5, "eval_interval_timesteps": 5000, "event": "train_start", "total_timesteps": 6144}
+{"elapsed_wall_s": 7.916, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.1234375, "mean_reward": -8.985691517742199, "success_rate": 0.0, "timesteps": 5000, "timesteps_fraction": 0.8138}
+{"elapsed_wall_s": 13.329, "episodes": 5, "event": "train_end", "mean_coverage": 0.06953125, "mean_reward": -24.13544593025029, "success_rate": 0.0, "timesteps": 6144, "timesteps_fraction": 1.0}

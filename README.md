@@ -34,15 +34,17 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 | PX4 Autopilot   | SITL (latest main)            |
 | DDS Bridge      | Micro XRCE-DDS Agent          |
 | Object Detection| YOLOv11 (Ultralytics)          |
+| Reinforcement Learning | Gymnasium + Stable-Baselines3 PPO |
 | OS              | Ubuntu 24.04                   |
 
 ## Quickstart (Docker &mdash; recommended)
 
-The stack runs as three Compose services built from the same Docker image:
+The stack runs as three default Compose services plus one optional training service built from the same Docker image:
 
 - `sim` — PX4 SITL, Gazebo, `ros_gz_bridge`, Foxglove, pose/TF publishers
 - `detection` — YOLOv11 inference subscribed to `/camera/image_raw` with optional depth fusion from `/camera/depth/image_raw`
-- `planning` — mission controller that arms, takes off, flies the search pattern, and investigates detections
+- `planning` — mission controller that arms, takes off, runs either the grid or PPO search policy, and investigates detections
+- `training` — optional Gymnasium + Stable-Baselines3 PPO training job for the task-level search environment
 
 **Prerequisites:** Docker Desktop or OrbStack on macOS / Linux.
 
@@ -59,6 +61,9 @@ docker compose logs -f sim
 # Follow detection logs
 docker compose logs -f detection
 
+# Run PPO training
+docker compose run --rm training
+
 # Open a shell inside the running sim container
 docker compose exec sim bash
 ```
@@ -66,6 +71,10 @@ docker compose exec sim bash
 `scripts/launch_sim.bash` starts `foxglove_bridge` and a PX4 pose bridge by default, so visualization is browser-based: open **Foxglove Studio** on the host and connect to `ws://localhost:8765`. Useful topics now include `/camera/image_raw`, `/camera/depth/image_raw`, `/camera/image_annotated`, `/detections`, `/detections_3d`, and `/detections_3d_markers`. In the 3D panel, add `/uav/drone_marker` for a visible drone pose marker and `/detections_3d_markers` for depth-localized targets.
 
 `scripts/launch_detection.bash` runs the detector directly from the bind-mounted source tree in a separate container, so code edits under [`src/uav_detection`](/Users/nicknationwide/uav-search-project/src/uav_detection) are picked up on container restart without a manual `colcon build`.
+
+`scripts/launch_planning.bash` now switches between the existing grid mission controller and the PPO-backed search controller via `SEARCH_POLICY=grid|rl`. To fly the learned policy in SITL, set `SEARCH_POLICY=rl`, point `RL_MODEL_PATH` and `RL_VECNORMALIZE_PATH` at saved artifacts, then restart the `planning` service.
+
+Training artifacts are written under [`artifacts/rl/search_policy`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy). The default training config lives at [`src/uav_rl/config/search_policy.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy.yaml).
 
 See [`docker/README.md`](docker/README.md) for details (rebuilding, caching, VS Code dev container, troubleshooting).
 
@@ -115,8 +124,10 @@ uav-search-project/
 ├── src/
 │   ├── uav_description/     # URDF/SDF models, Gazebo world files
 │   ├── uav_bringup/         # Launch files, config
-│   └── uav_detection/       # YOLOv11 ROS 2 detection node
-├── models/                  # YOLO model weights
+│   ├── uav_detection/       # YOLOv11 ROS 2 detection node
+│   ├── uav_planning/        # Grid-search mission controller and shared PX4 mission base
+│   └── uav_rl/              # Gymnasium env, PPO train/eval scripts, RL mission controller
+├── artifacts/               # Saved PPO models, normalization stats, and evaluation metrics
 ├── worlds/                  # Gazebo world files
 ├── .gitignore
 └── README.md

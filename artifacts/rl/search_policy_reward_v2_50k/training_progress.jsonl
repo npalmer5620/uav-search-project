@@ -1,0 +1,12 @@
+{"eval_episodes": 5, "eval_interval_timesteps": 5000, "event": "train_start", "total_timesteps": 50000}
+{"elapsed_wall_s": 3.694, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.0625, "mean_reward": -25.032765299481927, "success_rate": 0.0, "timesteps": 5000, "timesteps_fraction": 0.1}
+{"elapsed_wall_s": 7.006, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.059375, "mean_reward": -22.789192032127804, "success_rate": 0.0, "timesteps": 10000, "timesteps_fraction": 0.2}
+{"elapsed_wall_s": 9.906, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.16796875, "mean_reward": 3.4015430795379173, "success_rate": 0.0, "timesteps": 15000, "timesteps_fraction": 0.3}
+{"elapsed_wall_s": 14.28, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.0796875, "mean_reward": -10.36786484021033, "success_rate": 0.0, "timesteps": 20000, "timesteps_fraction": 0.4}
+{"elapsed_wall_s": 17.61, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.178125, "mean_reward": 7.788732903181891, "success_rate": 0.0, "timesteps": 25000, "timesteps_fraction": 0.5}
+{"elapsed_wall_s": 21.002, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.109375, "mean_reward": -5.752467720805749, "success_rate": 0.0, "timesteps": 30000, "timesteps_fraction": 0.6}
+{"elapsed_wall_s": 23.902, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.121875, "mean_reward": 0.2726570783923027, "success_rate": 0.0, "timesteps": 35000, "timesteps_fraction": 0.7}
+{"elapsed_wall_s": 26.097, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.15703125, "mean_reward": 3.5952499999999388, "success_rate": 0.0, "timesteps": 40000, "timesteps_fraction": 0.8}
+{"elapsed_wall_s": 28.846, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.1671875, "mean_reward": 11.395514982939021, "success_rate": 0.0, "timesteps": 45000, "timesteps_fraction": 0.9}
+{"elapsed_wall_s": 31.029, "episodes": 5, "event": "progress_eval", "mean_coverage": 0.16875, "mean_reward": 22.02183749999997, "success_rate": 0.2, "timesteps": 50000, "timesteps_fraction": 1.0}
+{"elapsed_wall_s": 34.329, "episodes": 5, "event": "train_end", "mean_coverage": 0.12734375, "mean_reward": 2.897957953549823, "success_rate": 0.0, "timesteps": 51200, "timesteps_fraction": 1.024}

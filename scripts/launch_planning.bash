@@ -26,7 +26,7 @@ if [[ -f "$REPO_DIR/install/setup.bash" ]]; then
     source_setup "$REPO_DIR/install/setup.bash"
 fi
 
-export PYTHONPATH="$REPO_DIR/src/uav_planning:${PYTHONPATH:-}"
+SEARCH_POLICY="${SEARCH_POLICY:-grid}"
 
 # Configurable via config.env (or environment)
 GRID_WIDTH="${GRID_WIDTH:-40.0}"
@@ -62,8 +62,39 @@ USE_SIM_TIME="${USE_SIM_TIME:-true}"
 SHELL_TAKEOFF_ARM_DELAY="${SHELL_TAKEOFF_ARM_DELAY:-5.0}"
 TAKEOFF_TIMEOUT_SECONDS="${TAKEOFF_TIMEOUT_SECONDS:-60.0}"
 HANDOFF_TIMEOUT_SECONDS="${HANDOFF_TIMEOUT_SECONDS:-60.0}"
+RL_MODEL_PATH="${RL_MODEL_PATH:-artifacts/rl/search_policy/model.zip}"
+RL_VECNORMALIZE_PATH="${RL_VECNORMALIZE_PATH:-artifacts/rl/search_policy/vecnormalize.pkl}"
+RL_DECISION_PERIOD_S="${RL_DECISION_PERIOD_S:-0.5}"
+RL_MAX_STEP_XY_M="${RL_MAX_STEP_XY_M:-4.0}"
+RL_COVERAGE_GRID_SIDE="${RL_COVERAGE_GRID_SIDE:-16}"
+
+case "$SEARCH_POLICY" in
+    grid)
+        export PYTHONPATH="$REPO_DIR/src/uav_planning:${PYTHONPATH:-}"
+        PLANNING_MODULE="uav_planning.mission_controller"
+        POLICY_LABEL="grid"
+        EXTRA_ARGS=()
+        ;;
+    rl)
+        export PYTHONPATH="$REPO_DIR/src/uav_planning:$REPO_DIR/src/uav_rl:${PYTHONPATH:-}"
+        PLANNING_MODULE="uav_rl.rl_mission_controller"
+        POLICY_LABEL="rl"
+        EXTRA_ARGS=(
+            -p rl.model_path:="$RL_MODEL_PATH"
+            -p rl.vecnormalize_path:="$RL_VECNORMALIZE_PATH"
+            -p rl.decision_period_s:="$RL_DECISION_PERIOD_S"
+            -p rl.max_step_xy_m:="$RL_MAX_STEP_XY_M"
+            -p rl.coverage_grid_side:="$RL_COVERAGE_GRID_SIDE"
+        )
+        ;;
+    *)
+        echo "ERROR: Unsupported SEARCH_POLICY='$SEARCH_POLICY' (expected 'grid' or 'rl')"
+        exit 1
+        ;;
+esac
 
 echo "=== UAV Mission Controller ==="
+echo "SEARCH_POLICY:        $POLICY_LABEL"
 echo "GRID_WIDTH:           $GRID_WIDTH"
 echo "GRID_HEIGHT:          $GRID_HEIGHT"
 echo "GRID_SPACING:         $GRID_SPACING"
@@ -85,6 +116,13 @@ echo "USE_SIM_TIME:         $USE_SIM_TIME"
 echo "SHELL_TAKEOFF_DELAY:  $SHELL_TAKEOFF_ARM_DELAY"
 echo "TAKEOFF_TIMEOUT:      $TAKEOFF_TIMEOUT_SECONDS"
 echo "HANDOFF_TIMEOUT:      $HANDOFF_TIMEOUT_SECONDS"
+if [[ "$POLICY_LABEL" == "rl" ]]; then
+    echo "RL_MODEL_PATH:        $RL_MODEL_PATH"
+    echo "RL_VECNORMALIZE:      $RL_VECNORMALIZE_PATH"
+    echo "RL_DECISION_PERIOD:   $RL_DECISION_PERIOD_S"
+    echo "RL_MAX_STEP_XY:       $RL_MAX_STEP_XY_M"
+    echo "RL_COVERAGE_GRID:     $RL_COVERAGE_GRID_SIDE"
+fi
 echo "=============================="
 
 echo "Waiting for /fmu/out/vehicle_local_position_v1..."
@@ -93,7 +131,7 @@ until ros2 topic list 2>/dev/null | grep -qx '/fmu/out/vehicle_local_position_v1
 done
 
 echo "Starting mission controller..."
-exec python3 -m uav_planning.mission_controller \
+exec python3 -m "$PLANNING_MODULE" \
     --ros-args \
     -p grid.width:="$GRID_WIDTH" \
     -p grid.height:="$GRID_HEIGHT" \
@@ -120,4 +158,5 @@ exec python3 -m uav_planning.mission_controller \
     -p takeoff_timeout_seconds:="$TAKEOFF_TIMEOUT_SECONDS" \
     -p handoff_timeout_seconds:="$HANDOFF_TIMEOUT_SECONDS" \
     -p px4_command_host:="$PX4_COMMAND_HOST" \
-    -p px4_command_port:="$PX4_COMMAND_PORT"
+    -p px4_command_port:="$PX4_COMMAND_PORT" \
+    "${EXTRA_ARGS[@]}"

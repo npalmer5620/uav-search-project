@@ -1,0 +1,246 @@
+{
+  "curriculum_v2_summary": {
+    "config_path": "/workspace/artifacts/rl/search_policy_curriculum_v2_50k/search_policy.yaml",
+    "model_path": "/workspace/artifacts/rl/search_policy_curriculum_v2_50k/model.zip",
+    "vecnormalize_path": "/workspace/artifacts/rl/search_policy_curriculum_v2_50k/vecnormalize.pkl",
+    "progress_path": "/workspace/artifacts/rl/search_policy_curriculum_v2_50k/training_progress.jsonl",
+    "total_timesteps": 50000,
+    "num_envs": 4,
+    "stages": [
+      {
+        "name": "bootstrap_small_map",
+        "index": 1,
+        "total_timesteps": 4000,
+        "env": {
+          "width": 20.0,
+          "height": 20.0,
+          "origin_x": 0.0,
+          "origin_y": 0.0,
+          "coverage_grid_side": 16,
+          "max_step_xy_m": 4.0,
+          "max_yaw_step_rad": 0.78539816339,
+          "decision_period_s": 0.5,
+          "search_speed": 2.0,
+          "target_detection_radius_m": 4.0,
+          "coverage_reward_scale": 10.0,
+          "first_target_found_bonus": 10.0,
+          "success_bonus": 50.0,
+          "step_penalty": 0.001,
+          "boundary_penalty": 0.05,
+          "timeout_penalty": 10.0,
+          "stagnation_penalty": 0.002,
+          "required_target_count": 1,
+          "max_episode_steps": 256,
+          "world_path": null
+        },
+        "evaluation": {
+          "episodes": 10,
+          "mean_reward": 52.63834949511882,
+          "success_rate": 0.9,
+          "mean_coverage": 0.037890625
+        }
+      },
+      {
+        "name": "intermediate_two_targets",
+        "index": 2,
+        "total_timesteps": 6000,
+        "env": {
+          "width": 26.0,
+          "height": 26.0,
+          "origin_x": 0.0,
+          "origin_y": 0.0,
+          "coverage_grid_side": 16,
+          "max_step_xy_m": 4.0,
+          "max_yaw_step_rad": 0.78539816339,
+          "decision_period_s": 0.5,
+          "search_speed": 2.0,
+          "target_detection_radius_m": 4.0,
+          "coverage_reward_scale": 10.0,
+          "first_target_found_bonus": 10.0,
+          "success_bonus": 50.0,
+          "step_penalty": 0.001,
+          "boundary_penalty": 0.05,
+          "timeout_penalty": 10.0,
+          "stagnation_penalty": 0.002,
+          "required_target_count": 2,
+          "max_episode_steps": 320,
+          "world_path": null
+        },
+        "evaluation": {
+          "episodes": 10,
+          "mean_reward": 62.254597505961534,
+          "success_rate": 0.9,
+          "mean_coverage": 0.09296875
+        }
+      },
+      {
+        "name": "intermediate_three_targets",
+        "index": 3,
+        "total_timesteps": 8000,
+        "env": {
+          "width": 32.0,
+          "height": 32.0,
+          "origin_x": 0.0,
+          "origin_y": 0.0,
+          "coverage_grid_side": 16,
+          "max_step_xy_m": 4.0,
+          "max_yaw_step_rad": 0.78539816339,
+          "decision_period_s": 0.5,
+          "search_speed": 2.0,
+          "target_detection_radius_m": 4.0,
+          "coverage_reward_scale": 10.0,
+          "first_target_found_bonus": 10.0,
+          "success_bonus": 50.0,
+          "step_penalty": 0.001,
+          "boundary_penalty": 0.05,
+          "timeout_penalty": 10.0,
+          "stagnation_penalty": 0.002,
+          "required_target_count": 3,
+          "max_episode_steps": 448,
+          "world_path": null
+        },
+        "evaluation": {
+          "episodes": 10,
+          "mean_reward": 15.977695887625979,
+          "success_rate": 0.2,
+          "mean_coverage": 0.139453125
+        }
+      },
+      {
+        "name": "intermediate_four_targets",
+        "index": 4,
+        "total_timesteps": 12000,
+        "env": {
+          "width": 36.0,
+          "height": 36.0,
+          "origin_x": 0.0,
+          "origin_y": 0.0,
+          "coverage_grid_side": 16,
+          "max_step_xy_m": 4.0,
+          "max_yaw_step_rad": 0.78539816339,
+          "decision_period_s": 0.5,
+          "search_speed": 2.0,
+          "target_detection_radius_m": 4.0,
+          "coverage_reward_scale": 10.0,
+          "first_target_found_bonus": 10.0,
+          "success_bonus": 50.0,
+          "step_penalty": 0.001,
+          "boundary_penalty": 0.05,
+          "timeout_penalty": 10.0,
+          "stagnation_penalty": 0.002,
+          "required_target_count": 4,
+          "max_episode_steps": 640,
+          "world_path": null
+        },
+        "evaluation": {
+          "episodes": 10,
+          "mean_reward": 19.12165807050563,
+          "success_rate": 0.3,
+          "mean_coverage": 0.19921875
+        }
+      },
+      {
+        "name": "full_task",
+        "index": 5,
+        "total_timesteps": 20000,
+        "env": {
+          "width": 40.0,
+          "height": 40.0,
+          "origin_x": 0.0,
+          "origin_y": 0.0,
+          "coverage_grid_side": 16,
+          "max_step_xy_m": 4.0,
+          "max_yaw_step_rad": 0.78539816339,
+          "decision_period_s": 0.5,
+          "search_speed": 2.0,
+          "target_detection_radius_m": 4.0,
+          "coverage_reward_scale": 10.0,
+          "first_target_found_bonus": 10.0,
+          "success_bonus": 50.0,
+          "step_penalty": 0.001,
+          "boundary_penalty": 0.05,
+          "timeout_penalty": 10.0,
+          "stagnation_penalty": 0.002,
+          "required_target_count": 5,
+          "max_episode_steps": 768,
+          "world_path": null
+        },
+        "evaluation": {
+          "episodes": 10,
+          "mean_reward": -28.058011471556746,
+          "success_rate": 0.0,
+          "mean_coverage": 0.1171875
+        }
+      }
+    ],
+    "evaluation": {
+      "episodes": 10,
+      "mean_reward": -28.058011471556746,
+      "success_rate": 0.0,
+      "mean_coverage": 0.1171875
+    }
+  },
+  "curriculum_v2_eval_100": {
+    "episodes": 100,
+    "mean_reward": -10.832253779844079,
+    "reward_std": 26.942532938704954,
+    "mean_coverage": 0.161796875,
+    "coverage_std": 0.08523716769027098,
+    "success_rate": 0.0,
+    "mean_steps": 768.0
+  },
+  "curriculum_v1_eval_100": {
+    "episodes": 100,
+    "mean_reward": -9.982343328078539,
+    "reward_std": 37.26598354579693,
+    "mean_coverage": 0.1797265625,
+    "coverage_std": 0.10857196133705156,
+    "success_rate": 0.03,
+    "mean_steps": 751.76
+  },
+  "reward_v2_eval_100": {
+    "episodes": 100,
+    "mean_reward": -0.10658603598283216,
+    "reward_std": 9.982370459460975,
+    "mean_coverage": 0.126875,
+    "coverage_std": 0.050038071443152164,
+    "success_rate": 0.0,
+    "mean_steps": 768.0
+  },
+  "reward_v1_eval_100": {
+    "episodes": 100,
+    "mean_reward": -4.646224375000026,
+    "reward_std": 8.16872215836918,
+    "mean_coverage": 0.0667578125,
+    "coverage_std": 0.02621611815418558,
+    "success_rate": 0.0,
+    "mean_steps": 768.0
+  },
+  "smoke_eval_100": {
+    "episodes": 100,
+    "mean_reward": -14.914930467661081,
+    "reward_std": 9.673793857139747,
+    "mean_coverage": 0.070625,
+    "coverage_std": 0.029834545373714848,
+    "success_rate": 0.0,
+    "mean_steps": 768.0
+  },
+  "untrained_ppo_eval_100": {
+    "episodes": 100,
+    "mean_reward": -11.357962900679787,
+    "reward_std": 2.7454073669745167,
+    "mean_coverage": 0.0196875,
+    "coverage_std": 0.00894044968807498,
+    "success_rate": 0.0,
+    "mean_steps": 768.0
+  },
+  "random_policy_eval_100": {
+    "episodes": 100,
+    "mean_reward": 73.67768890271893,
+    "reward_std": 36.96968147236956,
+    "mean_coverage": 0.6458203125,
+    "coverage_std": 0.13884183576604972,
+    "success_rate": 0.67,
+    "mean_steps": 558.7
+  }
+}

@@ -64,7 +64,7 @@ class ContinuousSpiral(Node):
         )
         self.create_subscription(
             VehicleStatus,
-            '/fmu/out/vehicle_status_v3',
+            '/fmu/out/vehicle_status_v4',
             self.vehicle_status_callback,
             qos_sub
         )

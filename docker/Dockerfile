@@ -122,12 +122,22 @@ RUN pip install --break-system-packages --no-cache-dir \
 # 2) ultralytics + ONNX runtime. No --ignore-installed here so pip sees the
 #    CPU torch from step 1b as satisfied and won't re-resolve it to CUDA.
 RUN pip install --break-system-packages --no-cache-dir \
+        gymnasium \
+        pyyaml \
+        stable-baselines3 \
+        tensorboard \
         ultralytics-opencv-headless \
         onnx \
         onnxruntime \
     && mkdir -p /root/.cache/yolo \
     && cd /root/.cache/yolo \
     && python3 -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=640, simplify=False)"
+
+# 2b) Stable-Baselines3 imports matplotlib during logger setup. The Debian
+#     matplotlib from apt is built against the system NumPy ABI, so overlay
+#     a pip wheel that matches the pip-installed NumPy stack used above.
+RUN pip install --break-system-packages --no-cache-dir --ignore-installed \
+        "matplotlib>=3.10"
 
 # ---------------------------------------------------------------------------
 # 5b. Increase PX4 Gazebo world startup timeout (default 30s is too short for

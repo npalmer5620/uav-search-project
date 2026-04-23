@@ -1,0 +1,57 @@
+{
+  "episodes": 100,
+  "evaluated_at": "2026-04-23",
+  "policies": {
+    "current_search_policy": {
+      "elapsed_wall_s": 52.294,
+      "episodes": 100,
+      "mean_coverage": 0.07015625,
+      "mean_reward": -57.2349234279284,
+      "success_rate": 0.0
+    },
+    "curriculum_50k": {
+      "elapsed_wall_s": 39.482,
+      "episodes": 100,
+      "mean_coverage": 0.183515625,
+      "mean_reward": -6.9034488762320025,
+      "success_rate": 0.04
+    },
+    "curriculum_v2_50k": {
+      "elapsed_wall_s": 42.939,
+      "episodes": 100,
+      "mean_coverage": 0.1569140625,
+      "mean_reward": -7.0515285898496645,
+      "success_rate": 0.01
+    },
+    "flat_50k": {
+      "elapsed_wall_s": 45.458,
+      "episodes": 100,
+      "mean_coverage": 0.0669921875,
+      "mean_reward": -13.953780624999917,
+      "success_rate": 0.0
+    },
+    "progress_smoke": {
+      "elapsed_wall_s": 40.514,
+      "episodes": 100,
+      "mean_coverage": 0.1078515625,
+      "mean_reward": -23.75838100198067,
+      "success_rate": 0.0
+    },
+    "random_baseline": {
+      "elapsed_wall_s": 2.302,
+      "episodes": 100,
+      "mean_coverage": 0.6409375,
+      "mean_reward": 11.216642471079469,
+      "mean_steps": 540.87,
+      "std_reward": 45.95592658850153,
+      "success_rate": 0.55
+    },
+    "reward_v2_50k": {
+      "elapsed_wall_s": 52.596,
+      "episodes": 100,
+      "mean_coverage": 0.12390625,
+      "mean_reward": 0.1120313763760663,
+      "success_rate": 0.0
+    }
+  }
+}
