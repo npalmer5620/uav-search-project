@@ -32,11 +32,16 @@ The repo itself is **not** baked into the image. `docker-compose.yml` bind-mount
 ## Usage
 
 ```bash
-# Build the image
+# Build the local uav-search-sim:latest image first on any new machine.
+# This image is not published to Docker Hub, so skipping this can make Compose
+# fail with "pull access denied for uav-search-sim".
 docker compose build
 
 # Start the full stack in the background
 docker compose up -d
+
+# Or build and start in one command
+docker compose up -d --build
 
 # Follow sim logs
 docker compose logs -f sim

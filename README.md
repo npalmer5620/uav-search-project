@@ -49,11 +49,16 @@ The stack runs as three default Compose services plus one optional training serv
 **Prerequisites:** Docker Desktop or OrbStack on macOS / Linux.
 
 ```bash
-# Build the image (first time is still substantial, but PX4 itself is prebuilt)
+# Build the local uav-search-sim:latest image first on any new machine.
+# This image is not published to Docker Hub, so skipping this can make Compose
+# fail with "pull access denied for uav-search-sim".
 docker compose build
 
 # Start the full stack in the background
 docker compose up -d
+
+# Or build and start in one command
+docker compose up -d --build
 
 # Follow sim logs
 docker compose logs -f sim
