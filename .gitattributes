@@ -1,0 +1,27 @@
+# Let Git detect text files while preserving binary artifacts.
+* text=auto
+
+# Shell scripts and container files must keep Unix line endings. Docker builds
+# run these under Linux, where CRLF shebangs are parsed as `bash\r`.
+*.sh text eol=lf
+*.bash text eol=lf
+Dockerfile text eol=lf
+docker/Dockerfile text eol=lf
+
+# Source and ROS/Gazebo config files are consumed by Linux tooling in Docker.
+*.py text eol=lf
+*.launch.py text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+*.msg text eol=lf
+*.sdf text eol=lf
+*.xml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.env text eol=lf
+
+# Model and training artifacts are binary.
+*.onnx binary
+*.pt binary
+*.pkl binary
+*.zip binary

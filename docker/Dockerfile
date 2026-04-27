@@ -93,7 +93,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # (missing `install` target, missing uagent install step, RPATH strip).
 ARG UXRCE_REF=v3.0.0
 COPY docker/build-uxrce.sh /tmp/build-uxrce.sh
-RUN chmod +x /tmp/build-uxrce.sh && /tmp/build-uxrce.sh "${UXRCE_REF}" && rm /tmp/build-uxrce.sh
+RUN sed -i 's/\r$//' /tmp/build-uxrce.sh \
+    && chmod +x /tmp/build-uxrce.sh \
+    && /tmp/build-uxrce.sh "${UXRCE_REF}" \
+    && rm /tmp/build-uxrce.sh
 
 # ---------------------------------------------------------------------------
 # 4. px4_msgs — built into a separate overlay so foxglove_bridge (and any
@@ -154,7 +157,7 @@ RUN sed -i 's/^ATTEMPTS=30$/ATTEMPTS=${PX4_GZ_WORLD_STARTUP_TIMEOUT:-120}/' \
 WORKDIR /workspace
 
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Exposed ports:
 #   8888/udp — MicroXRCEAgent (PX4 <-> ROS 2 DDS bridge)

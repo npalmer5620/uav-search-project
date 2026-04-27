@@ -29,6 +29,23 @@ The repo itself is **not** baked into the image. `docker-compose.yml` bind-mount
 - ~15 GB of free disk for the image + volumes
 - First build takes a while, but PX4 is already prebuilt in the base image
 
+## Windows line endings
+
+This repo includes `.gitattributes` rules that force Linux-executed files
+(`*.sh`, `*.bash`, Dockerfiles, ROS/Gazebo config) to use LF endings even on
+Windows checkouts. The Docker image build also normalizes copied entry scripts,
+and the container entrypoint normalizes bind-mounted workspace shell scripts if
+an older checkout still has CRLF endings.
+
+If an existing Windows checkout still fails with `bash\r` after pulling the
+latest repo changes, refresh the working tree. This discards uncommitted local
+edits, so stash or commit first if needed:
+
+```powershell
+git reset --hard HEAD
+docker compose build
+```
+
 ## Usage
 
 ```bash

@@ -5,6 +5,25 @@
 
 set -e
 
+normalized_scripts=0
+normalize_lf_endings() {
+    local file
+    for file in "$@"; do
+        [[ -f "$file" && -w "$file" ]] || continue
+        if LC_ALL=C grep -q $'\r$' "$file"; then
+            sed -i 's/\r$//' "$file"
+            normalized_scripts=1
+        fi
+    done
+}
+
+# Windows checkouts can leave bind-mounted shell scripts with CRLF endings.
+# Normalize only the scripts Linux executes so existing clones keep working.
+normalize_lf_endings /workspace/docker/*.sh /workspace/scripts/*.bash
+if [[ "$normalized_scripts" -eq 1 ]]; then
+    echo "Normalized CRLF line endings in workspace shell scripts." >&2
+fi
+
 # Source ROS 2 Jazzy
 source /opt/ros/jazzy/setup.bash
 
