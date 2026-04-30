@@ -1,36 +1,39 @@
 #!/usr/bin/env python3
-"""Shared PX4 mission controller base for search implementations."""
+"""Shared MAVSDK mission controller base for search implementations."""
 
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
 import math
-import os
-import socket
 from statistics import fmean, median
-import time
 from typing import Callable
 
 from geometry_msgs.msg import PoseStamped
-from px4_msgs.msg import (
-    OffboardControlMode,
-    TrajectorySetpoint,
-    VehicleCommand,
-    VehicleLocalPosition,
-    VehicleStatus,
-)
 from rclpy.node import Node
-from rclpy.qos import (
-    DurabilityPolicy,
-    HistoryPolicy,
-    QoSProfile,
-    ReliabilityPolicy,
-)
 from std_msgs.msg import String
 from vision_msgs.msg import Detection3DArray
 from visualization_msgs.msg import Marker, MarkerArray
 
+from uav_planning.mavsdk_backend import MavsdkBackend
 from uav_planning.spiral_generator import SpiralGenerator
+
+
+@dataclass
+class LocalPosition:
+    """Small NED state mirror populated from MAVSDK telemetry."""
+
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    xy_valid: bool = False
+    z_valid: bool = False
+    v_xy_valid: bool = False
+    v_z_valid: bool = False
+    xy_global: bool = False
+    z_global: bool = False
 
 
 @dataclass
@@ -88,7 +91,6 @@ class TrackedTarget:
 class Phase(Enum):
     PREFLIGHT = auto()
     ARMING = auto()
-    TAKEOFF = auto()
     HANDOFF = auto()
     SEARCH = auto()
     INVESTIGATE = auto()
@@ -98,21 +100,7 @@ class Phase(Enum):
 
 
 class MissionControllerBase(Node):
-    """Common PX4 mission flow with pluggable SEARCH behavior."""
-
-    @staticmethod
-    def _default_shell_takeoff_enabled() -> bool:
-        env_value = os.getenv("USE_PX4_SHELL_TAKEOFF")
-        if env_value is not None:
-            return env_value.strip().lower() in {"1", "true", "yes", "on"}
-        return os.path.exists("/.dockerenv")
-
-    @staticmethod
-    def _default_px4_command_host() -> str:
-        env_value = os.getenv("PX4_COMMAND_HOST")
-        if env_value:
-            return env_value
-        return "sim" if os.path.exists("/.dockerenv") else "127.0.0.1"
+    """Common MAVSDK mission flow with pluggable SEARCH behavior."""
 
     def __init__(
         self,
@@ -152,23 +140,11 @@ class MissionControllerBase(Node):
         self.declare_parameter("takeoff_altitude_tolerance", 0.5)
         self.declare_parameter("takeoff_velocity_tolerance", 0.3)
         self.declare_parameter("takeoff_stable_ticks", 20)
-        self.declare_parameter("takeoff_handoff_altitude", -2.5)
         self.declare_parameter("takeoff_timeout_proceed_altitude_tolerance", 1.0)
         self.declare_parameter("offboard_handoff_ticks", 10)
-        self.declare_parameter("preflight_settle_ticks", 0)
-        self.declare_parameter("shell_takeoff_arm_delay", 5.0)
         self.declare_parameter("takeoff_timeout_seconds", 60.0)
         self.declare_parameter("handoff_timeout_seconds", 60.0)
-        self.declare_parameter(
-            "use_px4_shell_takeoff",
-            self._default_shell_takeoff_enabled(),
-        )
-        self.declare_parameter(
-            "px4_command_host",
-            self._default_px4_command_host(),
-        )
-        self.declare_parameter("px4_command_port", 14600)
-        self.declare_parameter("px4_command_timeout", 1.0)
+        self.declare_parameter("mavsdk.system_address", "udpin://0.0.0.0:14540")
 
         self.declare_parameter("preflight_ticks", 20)
         self.declare_parameter("takeoff_ticks", 150)
@@ -237,21 +213,11 @@ class MissionControllerBase(Node):
         self.takeoff_stable_required = int(
             self.get_parameter("takeoff_stable_ticks").value
         )
-        self.takeoff_handoff_altitude = float(
-            self.get_parameter("takeoff_handoff_altitude").value
-        )
         self.takeoff_timeout_proceed_alt_tol = float(
             self.get_parameter("takeoff_timeout_proceed_altitude_tolerance").value
         )
         self.offboard_handoff_ticks = int(
             self.get_parameter("offboard_handoff_ticks").value
-        )
-        self.preflight_settle_ticks = int(
-            self.get_parameter("preflight_settle_ticks").value
-        )
-        self.shell_takeoff_arm_delay_s = max(
-            0.0,
-            float(self.get_parameter("shell_takeoff_arm_delay").value),
         )
         self.takeoff_timeout_s = max(
             0.1,
@@ -261,72 +227,21 @@ class MissionControllerBase(Node):
             0.1,
             float(self.get_parameter("handoff_timeout_seconds").value),
         )
-        self.use_px4_shell_takeoff = bool(
-            self.get_parameter("use_px4_shell_takeoff").value
-        )
-        self.px4_command_host = str(
-            self.get_parameter("px4_command_host").value
+        self.mavsdk_system_address = str(
+            self.get_parameter("mavsdk.system_address").value
         ).strip()
-        self.px4_command_port = int(
-            self.get_parameter("px4_command_port").value
+        self.mavsdk_backend = MavsdkBackend(
+            system_address=self.mavsdk_system_address,
+            logger=self.get_logger(),
         )
-        self.px4_command_timeout = float(
-            self.get_parameter("px4_command_timeout").value
-        )
+        self.mavsdk_backend.start()
+
         self.preflight_ticks = int(self.get_parameter("preflight_ticks").value)
         self.takeoff_ticks = int(self.get_parameter("takeoff_ticks").value)
         self.dt = float(self.get_parameter("timer_period").value)
-        if self.dt > 0.0:
-            self.shell_takeoff_arm_delay_ticks = max(
-                0,
-                int(math.ceil(self.shell_takeoff_arm_delay_s / self.dt)),
-            )
-        else:
-            self.shell_takeoff_arm_delay_ticks = 0
 
         self._init_search_controller()
 
-        qos_pub = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-        )
-        qos_sub = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-        )
-        qos_cmd = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-        )
-
-        self.offboard_mode_pub = self.create_publisher(
-            OffboardControlMode, "/fmu/in/offboard_control_mode", qos_pub
-        )
-        self.trajectory_pub = self.create_publisher(
-            TrajectorySetpoint, "/fmu/in/trajectory_setpoint", qos_pub
-        )
-        self.vehicle_command_pub = self.create_publisher(
-            VehicleCommand, "/fmu/in/vehicle_command", qos_cmd
-        )
-
-        self.create_subscription(
-            VehicleLocalPosition,
-            "/fmu/out/vehicle_local_position_v1",
-            self._local_pos_cb,
-            qos_sub,
-        )
-        self.create_subscription(
-            VehicleStatus,
-            "/fmu/out/vehicle_status_v4",
-            self._vehicle_status_cb,
-            qos_sub,
-        )
         self.create_subscription(
             Detection3DArray, "/detections_3d", self._detection_cb, 10
         )
@@ -337,8 +252,7 @@ class MissionControllerBase(Node):
         self.event_pub = self.create_publisher(String, "~/events", 10)
 
         self._phase = Phase.PREFLIGHT
-        self.local_pos = VehicleLocalPosition()
-        self.vehicle_status = VehicleStatus()
+        self.local_pos = LocalPosition()
         self.tick = 0
         self.preflight_ready_tick: int | None = None
         self.arming_tick = 0
@@ -350,12 +264,8 @@ class MissionControllerBase(Node):
         self.takeoff_stable_count = 0
         self.cruise_altitude: float | None = None
         self.handoff_hold_xy: tuple[float, float] | None = None
-        self.shell_takeoff_requested = False
         self.arm_retry_ticks = 10
-        self.takeoff_retry_ticks = 20
         self.offboard_retry_ticks = 10
-        self.command_burst_count = 10
-        self.command_burst_delay_s = 0.05
         self.search_elapsed_s = 0.0
 
         self.investigate_target: tuple[float, float, float] | None = None
@@ -381,12 +291,17 @@ class MissionControllerBase(Node):
             f"investigate_duration={self.investigate_duration}s, "
             f"tracking_min_hits={self.tracking_min_hits}, "
             f"tracking_min_confidence={self.tracking_min_confidence}, "
-            f"takeoff_mode={'px4_shell' if self.use_px4_shell_takeoff else 'vehicle_command'}, "
-            f"shell_takeoff_arm_delay={self.shell_takeoff_arm_delay_s:.1f}s, "
+            "flight_control=mavsdk, "
+            f"mavsdk_system_address={self.mavsdk_system_address}, "
             f"takeoff_timeout={self.takeoff_timeout_s:.1f}s, "
             f"handoff_timeout={self.handoff_timeout_s:.1f}s, "
             "timing_source=ros_clock"
         )
+
+    def destroy_node(self) -> bool:
+        if self.mavsdk_backend is not None:
+            self.mavsdk_backend.close()
+        return super().destroy_node()
 
     # -- Search hooks ---------------------------------------------------------
 
@@ -435,11 +350,23 @@ class MissionControllerBase(Node):
 
     # -- Callbacks ------------------------------------------------------------
 
-    def _local_pos_cb(self, msg: VehicleLocalPosition) -> None:
-        self.local_pos = msg
+    def _sync_mavsdk_local_position(self) -> None:
+        status = self.mavsdk_backend.status
+        if not status.position_velocity_valid:
+            return
 
-    def _vehicle_status_cb(self, msg: VehicleStatus) -> None:
-        self.vehicle_status = msg
+        self.local_pos.x = status.north_m
+        self.local_pos.y = status.east_m
+        self.local_pos.z = status.down_m
+        self.local_pos.vx = status.velocity_north_m_s
+        self.local_pos.vy = status.velocity_east_m_s
+        self.local_pos.vz = status.velocity_down_m_s
+        self.local_pos.xy_valid = True
+        self.local_pos.z_valid = True
+        self.local_pos.v_xy_valid = True
+        self.local_pos.v_z_valid = True
+        self.local_pos.xy_global = status.global_position_ok
+        self.local_pos.z_global = status.global_position_ok
 
     def _detection_cb(self, msg: Detection3DArray) -> None:
         if self.phase != Phase.SEARCH:
@@ -660,132 +587,37 @@ class MissionControllerBase(Node):
         self._publish_event(event)
         self.get_logger().info(event)
 
-    # -- PX4 helpers ----------------------------------------------------------
-
-    def _publish_offboard_mode(self) -> None:
-        msg = OffboardControlMode()
-        msg.position = True
-        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        self.offboard_mode_pub.publish(msg)
+    # -- MAVSDK helpers -------------------------------------------------------
 
     def _publish_setpoint(self, x: float, y: float, z: float, yaw: float) -> None:
-        msg = TrajectorySetpoint()
-        msg.position = [float(x), float(y), float(z)]
-        msg.velocity = [float("nan")] * 3
-        msg.acceleration = [float("nan")] * 3
-        msg.jerk = [float("nan")] * 3
-        msg.yaw = float(yaw)
-        msg.yawspeed = float("nan")
-        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        self.trajectory_pub.publish(msg)
-
-    def _send_command(
-        self,
-        command: int,
-        *,
-        from_external: bool = True,
-        param1: float = 0.0,
-        param2: float = 0.0,
-        param3: float = 0.0,
-        param4: float = 0.0,
-        param5: float = 0.0,
-        param6: float = 0.0,
-        param7: float = 0.0,
-    ) -> None:
-        msg = VehicleCommand()
-        msg.command = command
-        msg.param1 = float(param1)
-        msg.param2 = float(param2)
-        msg.param3 = float(param3)
-        msg.param4 = float(param4)
-        msg.param5 = float(param5)
-        msg.param6 = float(param6)
-        msg.param7 = float(param7)
-        msg.target_system = 1
-        msg.target_component = 1
-        msg.source_system = 1
-        msg.source_component = 1
-        msg.from_external = from_external
-        for _ in range(self.command_burst_count):
-            msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-            self.vehicle_command_pub.publish(msg)
-            if self.command_burst_delay_s > 0.0:
-                time.sleep(self.command_burst_delay_s)
+        self.mavsdk_backend.set_position_ned(x, y, z, yaw)
 
     def _arm(self) -> None:
-        self._send_command(
-            VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM,
-            from_external=False,
-            param1=1.0,
-        )
+        self.mavsdk_backend.arm()
 
     def _engage_offboard(self) -> None:
-        self._send_command(
-            VehicleCommand.VEHICLE_CMD_DO_SET_MODE,
-            param1=1.0,
-            param2=6.0,
-        )
+        self.mavsdk_backend.start_offboard()
 
     def _land(self) -> None:
-        self._send_command(
-            VehicleCommand.VEHICLE_CMD_NAV_LAND,
-            from_external=False,
-        )
+        self.mavsdk_backend.land()
 
     def _is_armed(self) -> bool:
-        return self.vehicle_status.arming_state == VehicleStatus.ARMING_STATE_ARMED
+        return self.mavsdk_backend.status.connected and self.mavsdk_backend.status.armed
 
     def _is_offboard(self) -> bool:
-        return self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD
+        return self.mavsdk_backend.status.connected and self.mavsdk_backend.status.offboard
 
-    def _has_takeoff_reference(self) -> bool:
+    def _preflight_checks_passed(self) -> bool:
+        status = self.mavsdk_backend.status
+        if status.last_error:
+            return False
         return (
-            self.local_pos.xy_valid
-            and self.local_pos.z_valid
-            and self.local_pos.xy_global
-            and self.local_pos.z_global
-            and math.isfinite(self.local_pos.ref_lat)
-            and math.isfinite(self.local_pos.ref_lon)
-            and math.isfinite(self.local_pos.ref_alt)
+            status.connected
+            and status.health_all_ok
+            and status.position_velocity_valid
         )
-
-    def _native_takeoff_target_altitude(self) -> float:
-        return max(self.search_altitude, self.takeoff_handoff_altitude)
-
-    def _send_native_takeoff(self) -> tuple[float, float]:
-        target_altitude = self._native_takeoff_target_altitude()
-        target_amsl = float(self.local_pos.ref_alt - target_altitude)
-        self._send_command(
-            VehicleCommand.VEHICLE_CMD_NAV_TAKEOFF,
-            from_external=False,
-            param5=float(self.local_pos.ref_lat),
-            param6=float(self.local_pos.ref_lon),
-            param7=target_amsl,
-        )
-        return target_altitude, target_amsl
-
-    def _send_px4_shell_command(self, command: str) -> bool:
-        command = command.strip()
-        if not command:
-            return False
-
-        try:
-            with socket.create_connection(
-                (self.px4_command_host, self.px4_command_port),
-                timeout=self.px4_command_timeout,
-            ) as sock:
-                sock.sendall((command + "\n").encode("utf-8"))
-        except OSError as exc:
-            self.get_logger().error(
-                f"Failed to send PX4 shell command '{command}': {exc}"
-            )
-            return False
-
-        return True
 
     def _current_yaw(self) -> float:
-        if math.isfinite(self.local_pos.heading):
-            return float(self.local_pos.heading)
         return 0.0
 
     # -- Visualization --------------------------------------------------------
@@ -958,13 +790,7 @@ class MissionControllerBase(Node):
     # -- Main loop ------------------------------------------------------------
 
     def _timer_cb(self) -> None:
-        if self.phase in (
-            Phase.HANDOFF,
-            Phase.SEARCH,
-            Phase.INVESTIGATE,
-            Phase.RTH,
-        ):
-            self._publish_offboard_mode()
+        self._sync_mavsdk_local_position()
 
         state_msg = String()
         state_msg.data = self.phase.name
@@ -973,198 +799,82 @@ class MissionControllerBase(Node):
         if self.phase == Phase.PREFLIGHT:
             if self.tick < self.preflight_ticks:
                 pass
-            elif not self.vehicle_status.pre_flight_checks_pass:
+            elif not self._preflight_checks_passed():
                 self.preflight_ready_tick = None
                 if self.tick % 50 == 0:
-                    self.get_logger().info("Waiting for PX4 preflight checks...")
-            elif (
-                not self.use_px4_shell_takeoff
-                and not self._has_takeoff_reference()
-            ):
-                self.preflight_ready_tick = None
-                if self.tick % 50 == 0:
+                    status = self.mavsdk_backend.status
+                    if status.last_error:
+                        detail = f" ({status.last_error})"
+                    else:
+                        detail = (
+                            " "
+                            f"(connected={status.connected}, "
+                            f"armable={status.armable}, "
+                            f"local={status.local_position_ok}, "
+                            f"global={status.global_position_ok}, "
+                            f"home={status.home_position_ok}, "
+                            f"ned={status.position_velocity_valid})"
+                        )
                     self.get_logger().info(
-                        "Waiting for PX4 global position reference for native takeoff..."
+                        f"Waiting for PX4 preflight checks{detail}..."
                     )
             else:
                 if self.preflight_ready_tick is None:
                     self.preflight_ready_tick = self.tick
 
-                settle_ticks = (
-                    self.preflight_settle_ticks if self.use_px4_shell_takeoff else 0
-                )
                 ticks_ready = self.tick - self.preflight_ready_tick
-                if ticks_ready < settle_ticks:
-                    if ticks_ready == 0 or ticks_ready % 50 == 0:
-                        remaining_s = (settle_ticks - ticks_ready) * self.dt
-                        self.get_logger().info(
-                            "PX4 preflight checks passed — waiting "
-                            f"{remaining_s:.0f}s for estimator settle before takeoff"
-                        )
-                else:
+                if ticks_ready >= 0:
                     self.get_logger().info(
-                        "PX4 preflight checks passed — starting "
-                        f"{'PX4 shell' if self.use_px4_shell_takeoff else 'native'} takeoff sequence"
+                        "PX4 preflight checks passed — starting MAVSDK offboard takeoff sequence"
                     )
                     self.phase = Phase.ARMING
                     self.arming_tick = self.tick
                     self.arm_ready_tick = None
-                    self.shell_takeoff_requested = False
 
         elif self.phase == Phase.ARMING:
             if self._is_armed():
                 if self.arm_ready_tick is None:
                     self.arm_ready_tick = self.tick
 
-                if self.use_px4_shell_takeoff:
-                    ticks_armed = self.tick - self.arm_ready_tick
-                    if ticks_armed < self.shell_takeoff_arm_delay_ticks:
-                        if ticks_armed == 0 or ticks_armed % 10 == 0:
-                            remaining_s = (
-                                self.shell_takeoff_arm_delay_ticks - ticks_armed
-                            ) * self.dt
-                            self.get_logger().info(
-                                "PX4 armed — waiting "
-                                f"{remaining_s:.1f}s before shell takeoff"
-                            )
-                    elif not self.shell_takeoff_requested:
-                        if not self._send_px4_shell_command("commander takeoff"):
-                            event = (
-                                "Failed to send PX4 shell takeoff command; aborting mission."
-                            )
-                            self._publish_event(event)
-                            self.get_logger().error(event)
-                            self.phase = Phase.LAND
-                        else:
-                            target_altitude = self._native_takeoff_target_altitude()
-                            self.get_logger().info(
-                                "PX4 armed — requesting PX4 shell takeoff to "
-                                f"{target_altitude:.2f}m handoff altitude"
-                            )
-                            self.shell_takeoff_requested = True
-                            self.phase = Phase.TAKEOFF
-                            self.takeoff_start_tick = self.tick
-                            self.takeoff_start_time = self._now_seconds()
-                            self.takeoff_stable_count = 0
-                else:
-                    target_altitude, target_amsl = self._send_native_takeoff()
-                    self.get_logger().info(
-                        "PX4 armed — requesting native takeoff to "
-                        f"{target_altitude:.2f}m (AMSL {target_amsl:.2f}m)"
-                    )
-                    self.phase = Phase.TAKEOFF
-                    self.takeoff_start_tick = self.tick
-                    self.takeoff_start_time = self._now_seconds()
-                    self.takeoff_stable_count = 0
+                self.handoff_hold_xy = (
+                    float(self.local_pos.x),
+                    float(self.local_pos.y),
+                )
+                hold_x, hold_y = self.handoff_hold_xy
+                self._publish_setpoint(
+                    hold_x,
+                    hold_y,
+                    self.search_altitude,
+                    self._current_yaw(),
+                )
+                self.get_logger().info(
+                    "PX4 armed — starting MAVSDK offboard climb to "
+                    f"{self.search_altitude:.2f}m"
+                )
+                self.phase = Phase.HANDOFF
+                self.handoff_start_tick = self.tick - self.offboard_handoff_ticks
+                self.handoff_start_time = self._now_seconds()
+                self.takeoff_stable_count = 0
             else:
                 self.arm_ready_tick = None
                 if (
                     self.tick == self.arming_tick
                     or (self.tick - self.arming_tick) % self.arm_retry_ticks == 0
                 ):
-                    if self.use_px4_shell_takeoff:
-                        if self._send_px4_shell_command("commander arm -f"):
-                            if self.tick == self.arming_tick:
-                                self.get_logger().info("PX4 shell arm command sent")
-                    else:
-                        self._arm()
-                        if self.tick == self.arming_tick:
-                            self.get_logger().info("Arm command sent")
+                    self._arm()
+                    if self.tick == self.arming_tick:
+                        self.get_logger().info("MAVSDK arm command sent")
 
                 arming_timeout_ticks = self.takeoff_ticks
-                if self.use_px4_shell_takeoff:
-                    arming_timeout_ticks += self.shell_takeoff_arm_delay_ticks
 
                 if self.tick >= self.arming_tick + arming_timeout_ticks:
                     event = (
-                        "Failed to arm PX4 for "
-                        f"{'shell' if self.use_px4_shell_takeoff else 'native'} takeoff; "
+                        "Failed to arm PX4 for MAVSDK offboard takeoff; "
                         "aborting mission."
                     )
                     self._publish_event(event)
                     self.get_logger().error(event)
                     self.phase = Phase.LAND
-
-        elif self.phase == Phase.TAKEOFF:
-            target_altitude = self._native_takeoff_target_altitude()
-            elapsed_takeoff_s = self._elapsed_seconds(self.takeoff_start_time)
-            alt_error = abs(self.local_pos.z - target_altitude)
-            vz = abs(self.local_pos.vz)
-            at_altitude = alt_error < self.takeoff_alt_tol
-            velocity_settled = vz < self.takeoff_vel_tol
-
-            if at_altitude and velocity_settled:
-                self.takeoff_stable_count += 1
-            else:
-                self.takeoff_stable_count = 0
-
-            if self.tick % 20 == 0:
-                ticks_in_takeoff = self.tick - self.takeoff_start_tick
-                self.get_logger().info(
-                    f"TAKEOFF {'shell' if self.use_px4_shell_takeoff else 'native'} "
-                    f"z={self.local_pos.z:.2f}m target={target_altitude:.2f}m "
-                    f"vz={self.local_pos.vz:.2f}m/s nav_state={self.vehicle_status.nav_state} "
-                    f"stable={self.takeoff_stable_count}/{self.takeoff_stable_required} "
-                    f"tick={ticks_in_takeoff}/{self.takeoff_ticks} "
-                    f"elapsed={elapsed_takeoff_s:.1f}/{self.takeoff_timeout_s:.1f}s"
-                )
-
-            if self.takeoff_stable_count >= self.takeoff_stable_required:
-                self.handoff_hold_xy = (
-                    float(self.local_pos.x),
-                    float(self.local_pos.y),
-                )
-                self.get_logger().info(
-                    f"{'PX4 shell' if self.use_px4_shell_takeoff else 'Native'} takeoff complete — reached handoff altitude "
-                    f"{target_altitude:.2f}m, preparing offboard takeover"
-                )
-                self.phase = Phase.HANDOFF
-                self.handoff_start_tick = self.tick
-                self.handoff_start_time = self._now_seconds()
-                self.takeoff_stable_count = 0
-            else:
-                ticks_in_takeoff = self.tick - self.takeoff_start_tick
-                if self.use_px4_shell_takeoff:
-                    if (
-                        ticks_in_takeoff > 0
-                        and ticks_in_takeoff % self.takeoff_retry_ticks == 0
-                        and self._is_armed()
-                        and self.vehicle_status.nav_state
-                        != VehicleStatus.NAVIGATION_STATE_AUTO_TAKEOFF
-                        and self.vehicle_status.takeoff_time == 0
-                        and self.local_pos.z > target_altitude + self.takeoff_alt_tol
-                    ):
-                        if self._send_px4_shell_command("commander takeoff"):
-                            self.get_logger().warn(
-                                "Retrying PX4 shell takeoff command"
-                            )
-                elif (
-                    ticks_in_takeoff > 0
-                    and ticks_in_takeoff % self.takeoff_retry_ticks == 0
-                    and self._is_armed()
-                    and self.vehicle_status.takeoff_time == 0
-                    and self._has_takeoff_reference()
-                ):
-                    _target_altitude, target_amsl = self._send_native_takeoff()
-                    self.get_logger().warn(
-                        "Retrying native takeoff request toward AMSL "
-                        f"{target_amsl:.2f}m"
-                    )
-
-            if (
-                self.phase == Phase.TAKEOFF
-                and self.takeoff_start_time > 0.0
-                and elapsed_takeoff_s >= self.takeoff_timeout_s
-            ):
-                event = (
-                    f"{'PX4 shell' if self.use_px4_shell_takeoff else 'Native'} takeoff failed to reach handoff altitude; aborting mission "
-                    f"at z={self.local_pos.z:.2f}m "
-                    f"(target={target_altitude:.2f}m, alt_error={alt_error:.2f}m, "
-                    f"vz={vz:.2f}m/s)"
-                )
-                self._publish_event(event)
-                self.get_logger().error(event)
-                self.phase = Phase.LAND
 
         elif self.phase == Phase.HANDOFF:
             if self.handoff_hold_xy is None:
@@ -1207,7 +917,8 @@ class MissionControllerBase(Node):
             if self.tick % 20 == 0:
                 self.get_logger().info(
                     f"HANDOFF z={self.local_pos.z:.2f}m target={self.search_altitude:.2f}m "
-                    f"vz={self.local_pos.vz:.2f}m/s nav_state={self.vehicle_status.nav_state} "
+                    f"vz={self.local_pos.vz:.2f}m/s "
+                    f"offboard={self._is_offboard()} "
                     f"stable={self.takeoff_stable_count}/{self.takeoff_stable_required} "
                     f"tick={ticks_in_handoff}/{self.takeoff_ticks} "
                     f"elapsed={elapsed_handoff_s:.1f}/{self.handoff_timeout_s:.1f}s"

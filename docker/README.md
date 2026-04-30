@@ -19,6 +19,7 @@ Built from `docker/Dockerfile`, single-stage, one image reused by the sim, detec
 - Micro XRCE-DDS Agent built from source at a pinned ref
 - PX4 SITL + Gazebo preinstalled at `/opt/px4-gazebo`
 - `ultralytics`, `opencv-python`, `numpy`, `gymnasium`, `stable-baselines3`, `tensorboard`, and `pyyaml` via pip
+- `mavsdk` via pip for Python MAVLink control
 - `yolo11n.pt` pre-downloaded into `/root/.cache/yolo`
 
 The repo itself is **not** baked into the image. `docker-compose.yml` bind-mounts the host repo to `/workspace` so code edits on the host are live inside both containers.
@@ -80,9 +81,34 @@ The entrypoint seeds `config.env` from `config.env.docker` on first run if the u
 
 The detection container launches `scripts/launch_detection.bash`, which runs the detector directly from [`src/uav_detection`](/Users/nicknationwide/uav-search-project/src/uav_detection) using `PYTHONPATH`. That keeps iteration simple and avoids `ament_python` editable-install issues in the container runtime.
 
-The planning container launches `scripts/launch_planning.bash`, which now honors `SEARCH_POLICY=grid|rl` plus `RL_MODEL_PATH`, `RL_VECNORMALIZE_PATH`, `RL_DECISION_PERIOD_S`, `RL_MAX_STEP_XY_M`, and `RL_COVERAGE_GRID_SIDE`.
+The planning container launches `scripts/launch_planning.bash`, which controls PX4 through MAVSDK and honors `SEARCH_POLICY=grid|rl` plus `RL_MODEL_PATH`, `RL_VECNORMALIZE_PATH`, `RL_DECISION_PERIOD_S`, `RL_MAX_STEP_XY_M`, and `RL_COVERAGE_GRID_SIDE`.
+
+The sim launcher starts a PX4 MAVLink UDP stream to the `planning` service by default; override `MAVSDK_SYSTEM_ADDRESS`, `MAVSDK_MAVLINK_TARGET`, or `ENABLE_MAVSDK_MAVLINK=0` if you run the controller somewhere else.
+
+For a focused flight-control check, run:
+
+```bash
+bash scripts/smoke_mavsdk_sitl.bash
+```
+
+That smoke test boots SITL, connects MAVSDK, arms, climbs to `-10m` NED down, commands a short grid segment, verifies the telemetry trace reached each commanded waypoint in order, then lands.
 
 The training container launches `scripts/launch_training.bash`, defaulting to [`src/uav_rl/config/search_policy.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy.yaml) and writing artifacts into [`artifacts/rl/search_policy`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy).
+
+## Fast Gazebo episode reset
+
+For SITL-backed Gym experiments, reset the drone model pose without recreating
+the Docker stack:
+
+```bash
+scripts/reset_gazebo_drone.bash --x 0 --y 0 --z 0 --yaw 0
+```
+
+The script runs from the host or inside the `sim` container. It uses Gazebo's
+model-only reset plus `/world/<world>/set_pose`, then prints the resulting
+`/world/<world>/dynamic_pose/info` pose for verification. Avoid Gazebo's full
+world reset (`reset { all: true }`) for training episodes; it resets simulation
+time hard enough to break the PX4 SITL launch flow.
 
 ## Visualization (Foxglove)
 

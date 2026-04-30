@@ -58,7 +58,31 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "  cp $REPO_DIR/config.env.example $REPO_DIR/config.env"
     exit 1
 fi
+PX4_GZ_WORLD_ENV="${PX4_GZ_WORLD:-}"
+ENABLE_MAVSDK_MAVLINK_ENV="${ENABLE_MAVSDK_MAVLINK:-}"
+MAVSDK_MAVLINK_TARGET_ENV="${MAVSDK_MAVLINK_TARGET:-}"
+MAVSDK_MAVLINK_LOCAL_PORT_ENV="${MAVSDK_MAVLINK_LOCAL_PORT:-}"
+MAVSDK_MAVLINK_REMOTE_PORT_ENV="${MAVSDK_MAVLINK_REMOTE_PORT:-}"
+MAVSDK_MAVLINK_RATE_ENV="${MAVSDK_MAVLINK_RATE:-}"
 source "$CONFIG_FILE"
+if [[ -n "$PX4_GZ_WORLD_ENV" ]]; then
+    PX4_GZ_WORLD="$PX4_GZ_WORLD_ENV"
+fi
+if [[ -n "$ENABLE_MAVSDK_MAVLINK_ENV" ]]; then
+    ENABLE_MAVSDK_MAVLINK="$ENABLE_MAVSDK_MAVLINK_ENV"
+fi
+if [[ -n "$MAVSDK_MAVLINK_TARGET_ENV" ]]; then
+    MAVSDK_MAVLINK_TARGET="$MAVSDK_MAVLINK_TARGET_ENV"
+fi
+if [[ -n "$MAVSDK_MAVLINK_LOCAL_PORT_ENV" ]]; then
+    MAVSDK_MAVLINK_LOCAL_PORT="$MAVSDK_MAVLINK_LOCAL_PORT_ENV"
+fi
+if [[ -n "$MAVSDK_MAVLINK_REMOTE_PORT_ENV" ]]; then
+    MAVSDK_MAVLINK_REMOTE_PORT="$MAVSDK_MAVLINK_REMOTE_PORT_ENV"
+fi
+if [[ -n "$MAVSDK_MAVLINK_RATE_ENV" ]]; then
+    MAVSDK_MAVLINK_RATE="$MAVSDK_MAVLINK_RATE_ENV"
+fi
 
 # Expand tilde in PX4_DIR
 PX4_DIR="${PX4_DIR/#\~/$HOME}"
@@ -115,17 +139,10 @@ XRCE_PID=$!
 # Give agent a moment to bind
 sleep 1
 
-# Create a named pipe so we can send commands to the PX4 shell later
+# Create a named pipe so this launcher can configure PX4 parameters.
 PX4_PIPE="/tmp/px4_pipe_$$"
 mkfifo "$PX4_PIPE"
 exec 3<>"$PX4_PIPE"   # hold the pipe open (read+write) so writes don't EOF PX4
-
-PX4_COMMAND_PORT="${PX4_COMMAND_PORT:-14600}"
-echo "Starting PX4 shell command bridge on port ${PX4_COMMAND_PORT}..."
-python3 "$REPO_DIR/scripts/px4_command_bridge.py" \
-    --pipe "$PX4_PIPE" \
-    --port "$PX4_COMMAND_PORT" &
-PX4_COMMAND_BRIDGE_PID=$!
 
 # Start PX4 SITL (this also launches Gazebo)
 echo "Starting PX4 SITL..."
@@ -177,7 +194,6 @@ cleanup() {
     [[ -n "${POSE_BRIDGE_PID}" ]] && kill "${POSE_BRIDGE_PID}" 2>/dev/null || true
     [[ -n "${FOXGLOVE_PID}" ]] && kill "${FOXGLOVE_PID}" 2>/dev/null || true
     [[ -n "${BRIDGE_PID}" ]] && kill "${BRIDGE_PID}" 2>/dev/null || true
-    [[ -n "${PX4_COMMAND_BRIDGE_PID:-}" ]] && kill "${PX4_COMMAND_BRIDGE_PID}" 2>/dev/null || true
     kill "${PX4_PID}" 2>/dev/null || true
     kill "${XRCE_PID}" 2>/dev/null || true
     exec 3>&-                          # close the pipe fd
@@ -302,9 +318,19 @@ echo "param set NAV_DLL_ACT 0" > "$PX4_PIPE"
 echo "Waiting for PX4 health checks to pass..."
 sleep 10
 
-# NOTE: The mission controller now uses the internal command bridge to send
-# `commander arm -f` / `commander takeoff`, then hands control back to ROS
-# offboard setpoints once the vehicle is airborne.
+if [[ "${ENABLE_MAVSDK_MAVLINK:-1}" == "1" ]]; then
+    MAVSDK_MAVLINK_TARGET="${MAVSDK_MAVLINK_TARGET:-planning}"
+    MAVSDK_MAVLINK_LOCAL_PORT="${MAVSDK_MAVLINK_LOCAL_PORT:-14541}"
+    MAVSDK_MAVLINK_REMOTE_PORT="${MAVSDK_MAVLINK_REMOTE_PORT:-14540}"
+    MAVSDK_MAVLINK_RATE="${MAVSDK_MAVLINK_RATE:-4000000}"
+    MAVSDK_MAVLINK_TARGET_IP="$(getent ahostsv4 "$MAVSDK_MAVLINK_TARGET" 2>/dev/null | awk '{print $1; exit}')"
+    if [[ -z "$MAVSDK_MAVLINK_TARGET_IP" ]]; then
+        MAVSDK_MAVLINK_TARGET_IP="$MAVSDK_MAVLINK_TARGET"
+    fi
+    echo "Starting PX4 MAVLink stream for MAVSDK (${MAVSDK_MAVLINK_TARGET_IP}:${MAVSDK_MAVLINK_REMOTE_PORT})..."
+    echo "mavlink start -x -u ${MAVSDK_MAVLINK_LOCAL_PORT} -r ${MAVSDK_MAVLINK_RATE} -t ${MAVSDK_MAVLINK_TARGET_IP} -o ${MAVSDK_MAVLINK_REMOTE_PORT}" > "$PX4_PIPE" || true
+    sleep 1
+fi
 
 echo ""
 echo "All processes running. Mission controller will arm and take off when PX4 is ready."
@@ -318,8 +344,6 @@ if [[ "${ENABLE_FOXGLOVE:-1}" == "1" ]]; then
     fi
 fi
 echo ""
-echo "To send more PX4 commands:  echo 'commander land' > $PX4_PIPE"
-echo "Internal PX4 command bridge: sim:${PX4_COMMAND_PORT}"
 echo "Press Ctrl+C to stop everything."
 
 wait

@@ -23,8 +23,8 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "search_node = uav_planning.search_node:main",
             "mission_controller = uav_planning.mission_controller:main",
+            "mavsdk_smoke_test = uav_planning.mavsdk_smoke_test:main",
         ],
     },
 )

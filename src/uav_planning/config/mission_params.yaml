@@ -27,10 +27,8 @@ mission_controller:
     takeoff_altitude_tolerance: 0.5
     takeoff_velocity_tolerance: 0.3
     takeoff_stable_ticks: 20
-    takeoff_handoff_altitude: -2.5
     takeoff_timeout_proceed_altitude_tolerance: 1.0
     offboard_handoff_ticks: 10
-    shell_takeoff_arm_delay: 5.0
     takeoff_timeout_seconds: 60.0
     handoff_timeout_seconds: 60.0
     preflight_ticks: 20

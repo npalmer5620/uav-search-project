@@ -27,6 +27,7 @@ if [[ -f "$REPO_DIR/install/setup.bash" ]]; then
 fi
 
 SEARCH_POLICY="${SEARCH_POLICY:-grid}"
+MAVSDK_SYSTEM_ADDRESS="${MAVSDK_SYSTEM_ADDRESS:-udpin://0.0.0.0:14540}"
 
 # Configurable via config.env (or environment)
 GRID_WIDTH="${GRID_WIDTH:-40.0}"
@@ -48,18 +49,7 @@ TRACKING_HISTORY_SIZE="${TRACKING_HISTORY_SIZE:-5}"
 TRACKING_MIN_HITS="${TRACKING_MIN_HITS:-3}"
 TRACKING_MIN_AGE="${TRACKING_MIN_AGE:-0.5}"
 TRACKING_MIN_CONFIDENCE="${TRACKING_MIN_CONFIDENCE:-0.65}"
-if [[ -f "/.dockerenv" ]]; then
-    DEFAULT_PX4_COMMAND_HOST="sim"
-    DEFAULT_USE_PX4_SHELL_TAKEOFF="true"
-else
-    DEFAULT_PX4_COMMAND_HOST="127.0.0.1"
-    DEFAULT_USE_PX4_SHELL_TAKEOFF="false"
-fi
-PX4_COMMAND_HOST="${PX4_COMMAND_HOST:-$DEFAULT_PX4_COMMAND_HOST}"
-PX4_COMMAND_PORT="${PX4_COMMAND_PORT:-14600}"
-USE_PX4_SHELL_TAKEOFF="${USE_PX4_SHELL_TAKEOFF:-$DEFAULT_USE_PX4_SHELL_TAKEOFF}"
 USE_SIM_TIME="${USE_SIM_TIME:-true}"
-SHELL_TAKEOFF_ARM_DELAY="${SHELL_TAKEOFF_ARM_DELAY:-5.0}"
 TAKEOFF_TIMEOUT_SECONDS="${TAKEOFF_TIMEOUT_SECONDS:-60.0}"
 HANDOFF_TIMEOUT_SECONDS="${HANDOFF_TIMEOUT_SECONDS:-60.0}"
 RL_MODEL_PATH="${RL_MODEL_PATH:-artifacts/rl/search_policy/model.zip}"
@@ -95,6 +85,8 @@ esac
 
 echo "=== UAV Mission Controller ==="
 echo "SEARCH_POLICY:        $POLICY_LABEL"
+echo "CONTROL:              mavsdk"
+echo "MAVSDK_ADDRESS:       $MAVSDK_SYSTEM_ADDRESS"
 echo "GRID_WIDTH:           $GRID_WIDTH"
 echo "GRID_HEIGHT:          $GRID_HEIGHT"
 echo "GRID_SPACING:         $GRID_SPACING"
@@ -109,11 +101,7 @@ echo "TRACKING_TIMEOUT:     $TRACKING_TIMEOUT"
 echo "TRACKING_MIN_HITS:    $TRACKING_MIN_HITS"
 echo "TRACKING_MIN_AGE:     $TRACKING_MIN_AGE"
 echo "TRACKING_MIN_CONF:    $TRACKING_MIN_CONFIDENCE"
-echo "PX4_COMMAND_HOST:     $PX4_COMMAND_HOST"
-echo "PX4_COMMAND_PORT:     $PX4_COMMAND_PORT"
-echo "PX4_SHELL_TAKEOFF:    $USE_PX4_SHELL_TAKEOFF"
 echo "USE_SIM_TIME:         $USE_SIM_TIME"
-echo "SHELL_TAKEOFF_DELAY:  $SHELL_TAKEOFF_ARM_DELAY"
 echo "TAKEOFF_TIMEOUT:      $TAKEOFF_TIMEOUT_SECONDS"
 echo "HANDOFF_TIMEOUT:      $HANDOFF_TIMEOUT_SECONDS"
 if [[ "$POLICY_LABEL" == "rl" ]]; then
@@ -124,11 +112,6 @@ if [[ "$POLICY_LABEL" == "rl" ]]; then
     echo "RL_COVERAGE_GRID:     $RL_COVERAGE_GRID_SIDE"
 fi
 echo "=============================="
-
-echo "Waiting for /fmu/out/vehicle_local_position_v1..."
-until ros2 topic list 2>/dev/null | grep -qx '/fmu/out/vehicle_local_position_v1'; do
-    sleep 2
-done
 
 echo "Starting mission controller..."
 exec python3 -m "$PLANNING_MODULE" \
@@ -152,11 +135,8 @@ exec python3 -m "$PLANNING_MODULE" \
     -p tracking.min_hits:="$TRACKING_MIN_HITS" \
     -p tracking.min_age:="$TRACKING_MIN_AGE" \
     -p tracking.min_confidence:="$TRACKING_MIN_CONFIDENCE" \
+    -p mavsdk.system_address:="$MAVSDK_SYSTEM_ADDRESS" \
     -p use_sim_time:="$USE_SIM_TIME" \
-    -p use_px4_shell_takeoff:="$USE_PX4_SHELL_TAKEOFF" \
-    -p shell_takeoff_arm_delay:="$SHELL_TAKEOFF_ARM_DELAY" \
     -p takeoff_timeout_seconds:="$TAKEOFF_TIMEOUT_SECONDS" \
     -p handoff_timeout_seconds:="$HANDOFF_TIMEOUT_SECONDS" \
-    -p px4_command_host:="$PX4_COMMAND_HOST" \
-    -p px4_command_port:="$PX4_COMMAND_PORT" \
     "${EXTRA_ARGS[@]}"

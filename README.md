@@ -23,7 +23,7 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 1. **Gazebo Harmonic** simulates the quadcopter and its monocular camera sensor
 2. Camera images are bridged into ROS 2 as `sensor_msgs/Image` via `ros_gz_bridge`
 3. A **YOLOv11** (Ultralytics) ROS 2 node subscribes to the image topic, runs inference, and publishes detections
-4. **PX4 SITL** communicates with ROS 2 over the Micro XRCE-DDS agent for flight control and telemetry
+4. The mission controller uses **MAVSDK** over PX4 MAVLink for arming, offboard setpoints, landing, and vehicle telemetry
 
 ## Tech Stack
 
@@ -32,6 +32,7 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 | ROS 2           | Jazzy Jalisco                  |
 | Gazebo          | Harmonic                       |
 | PX4 Autopilot   | SITL (latest main)            |
+| MAVSDK          | Python MAVLink control        |
 | DDS Bridge      | Micro XRCE-DDS Agent          |
 | Object Detection| YOLOv11 (Ultralytics)          |
 | Reinforcement Learning | Gymnasium + Stable-Baselines3 PPO |

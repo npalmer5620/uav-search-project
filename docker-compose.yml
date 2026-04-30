@@ -29,7 +29,18 @@ services:
 
     ports:
       - "8888:8888/udp"   # MicroXRCEAgent
+      - "14540:14540/udp" # PX4 MAVLink for MAVSDK
       - "8765:8765/tcp"   # foxglove_bridge WebSocket
+
+    environment:
+      - PX4_GZ_WORLD=${PX4_GZ_WORLD:-}
+      - PX4_SIM_MODEL=${PX4_SIM_MODEL:-}
+      - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-}
+      - ENABLE_MAVSDK_MAVLINK=${ENABLE_MAVSDK_MAVLINK:-}
+      - MAVSDK_MAVLINK_TARGET=${MAVSDK_MAVLINK_TARGET:-}
+      - MAVSDK_MAVLINK_LOCAL_PORT=${MAVSDK_MAVLINK_LOCAL_PORT:-}
+      - MAVSDK_MAVLINK_REMOTE_PORT=${MAVSDK_MAVLINK_REMOTE_PORT:-}
+      - MAVSDK_MAVLINK_RATE=${MAVSDK_MAVLINK_RATE:-}
 
     # Start the full sim stack by default so `docker compose up -d` is enough
     # to launch PX4 + Gazebo + ROS bridge + Foxglove. Use `docker compose exec`
@@ -70,7 +81,31 @@ services:
       - colcon-install:/workspace/install
       - colcon-log:/workspace/log
 
-    command: ["bash", "-lc", "bash /workspace/scripts/launch_planning.bash"]
+    environment:
+      - PLANNING_MODE=${PLANNING_MODE:-mission}
+      - SMOKE_ALTITUDE=${SMOKE_ALTITUDE:--10.0}
+      - SMOKE_GRID_WIDTH=${SMOKE_GRID_WIDTH:-20.0}
+      - SMOKE_GRID_HEIGHT=${SMOKE_GRID_HEIGHT:-20.0}
+      - SMOKE_GRID_SPACING=${SMOKE_GRID_SPACING:-10.0}
+      - SMOKE_GRID_SPEED=${SMOKE_GRID_SPEED:-2.0}
+      - SMOKE_SEARCH_WAYPOINTS=${SMOKE_SEARCH_WAYPOINTS:-4}
+      - SMOKE_GOTO_TIMEOUT=${SMOKE_GOTO_TIMEOUT:-75.0}
+      - SMOKE_HEALTH_TIMEOUT=${SMOKE_HEALTH_TIMEOUT:-150.0}
+      - SMOKE_LAND_TIMEOUT=${SMOKE_LAND_TIMEOUT:-90.0}
+      - SMOKE_HOLD_SECONDS=${SMOKE_HOLD_SECONDS:-2.0}
+      - SMOKE_VERIFY_HORIZONTAL_TOLERANCE=${SMOKE_VERIFY_HORIZONTAL_TOLERANCE:-1.5}
+      - SMOKE_VERIFY_VERTICAL_TOLERANCE=${SMOKE_VERIFY_VERTICAL_TOLERANCE:-1.0}
+      - SMOKE_VERIFY_MIN_PATH_RATIO=${SMOKE_VERIFY_MIN_PATH_RATIO:-0.55}
+
+    command:
+      - "bash"
+      - "-lc"
+      - |
+        if [[ "$${PLANNING_MODE:-mission}" == "smoke" ]]; then
+          bash /workspace/scripts/launch_mavsdk_smoke.bash
+        else
+          bash /workspace/scripts/launch_planning.bash
+        fi
 
   training:
     image: uav-search-sim:latest

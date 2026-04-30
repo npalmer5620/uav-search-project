@@ -14,7 +14,7 @@
 # We layer on top:
 #   - ROS 2 Jazzy (base) and the ros_gz / foxglove / vision_msgs packages
 #   - Micro XRCE-DDS Agent (built from source; no apt package for Jazzy)
-#   - ultralytics + opencv-python + numpy, with yolo11n.pt pre-fetched
+#   - ultralytics + opencv-python + numpy + MAVSDK, with yolo11n.pt pre-fetched
 #
 # Skipping the PX4 source clone and compile cuts ~30-60 minutes off the
 # first build. PX4 is not modified by this project, so there is no reason
@@ -126,6 +126,7 @@ RUN pip install --break-system-packages --no-cache-dir \
 #    CPU torch from step 1b as satisfied and won't re-resolve it to CUDA.
 RUN pip install --break-system-packages --no-cache-dir \
         gymnasium \
+        mavsdk \
         pyyaml \
         stable-baselines3 \
         tensorboard \
