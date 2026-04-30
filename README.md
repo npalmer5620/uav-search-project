@@ -35,7 +35,7 @@ Quadcopter SITL simulation with real-time YOLOv11 object detection on monocular 
 | MAVSDK          | Python MAVLink control        |
 | DDS Bridge      | Micro XRCE-DDS Agent          |
 | Object Detection| YOLOv11 (Ultralytics)          |
-| Reinforcement Learning | Gymnasium + Stable-Baselines3 PPO |
+| Reinforcement Learning | Gymnasium + Stable-Baselines3 DQN/PPO |
 | OS              | Ubuntu 24.04                   |
 
 ## Quickstart (Docker &mdash; recommended)
@@ -44,8 +44,8 @@ The stack runs as three default Compose services plus one optional training serv
 
 - `sim` — PX4 SITL, Gazebo, `ros_gz_bridge`, Foxglove, pose/TF publishers
 - `detection` — YOLOv11 inference subscribed to `/camera/image_raw` with optional depth fusion from `/camera/depth/image_raw`
-- `planning` — mission controller that arms, takes off, runs either the grid or PPO search policy, and investigates detections
-- `training` — optional Gymnasium + Stable-Baselines3 PPO training job for the task-level search environment
+- `planning` — mission controller that arms, takes off, runs either the grid or learned RL search policy, and investigates detections
+- `training` — optional Gymnasium + Stable-Baselines3 DQN training job for the V2 belief-map search environment
 
 **Prerequisites:** Docker Desktop or OrbStack on macOS / Linux.
 
@@ -67,7 +67,7 @@ docker compose logs -f sim
 # Follow detection logs
 docker compose logs -f detection
 
-# Run PPO training
+# Run V2 DQN training
 docker compose run --rm training
 
 # Open a shell inside the running sim container
@@ -78,9 +78,9 @@ docker compose exec sim bash
 
 `scripts/launch_detection.bash` runs the detector directly from the bind-mounted source tree in a separate container, so code edits under [`src/uav_detection`](/Users/nicknationwide/uav-search-project/src/uav_detection) are picked up on container restart without a manual `colcon build`.
 
-`scripts/launch_planning.bash` now switches between the existing grid mission controller and the PPO-backed search controller via `SEARCH_POLICY=grid|rl`. To fly the learned policy in SITL, set `SEARCH_POLICY=rl`, point `RL_MODEL_PATH` and `RL_VECNORMALIZE_PATH` at saved artifacts, then restart the `planning` service.
+`scripts/launch_planning.bash` switches between the existing grid mission controller and the learned search controller via `SEARCH_POLICY=grid|rl`. The default search altitude is `GRID_ALTITUDE=-4.0` NED to keep upright person targets larger in the forward RGBD camera. V2 is the default RL path (`RL_POLICY_VERSION=v2`, `RL_ALGORITHM=dqn`) and uses discrete macro-actions over a forward-camera belief map. To fly the learned policy in SITL, set `SEARCH_POLICY=rl`, point `RL_MODEL_PATH` at a V2 `model.zip`, then restart the `planning` service.
 
-Training artifacts are written under [`artifacts/rl/search_policy`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy). The default training config lives at [`src/uav_rl/config/search_policy.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy.yaml).
+Training artifacts are written under [`artifacts/rl/search_policy_v2`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy_v2). The default V2 training config lives at [`src/uav_rl/config/search_policy_v2.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy_v2.yaml). The legacy PPO config remains at [`src/uav_rl/config/search_policy.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy.yaml) and can be selected with `RL_POLICY_VERSION=v1`.
 
 See [`docker/README.md`](docker/README.md) for details (rebuilding, caching, VS Code dev container, troubleshooting).
 
@@ -132,7 +132,7 @@ uav-search-project/
 │   ├── uav_bringup/         # Launch files, config
 │   ├── uav_detection/       # YOLOv11 ROS 2 detection node
 │   ├── uav_planning/        # Grid-search mission controller and shared PX4 mission base
-│   └── uav_rl/              # Gymnasium env, PPO train/eval scripts, RL mission controller
+│   └── uav_rl/              # Gymnasium envs, DQN/PPO train/eval scripts, RL mission controller
 ├── artifacts/               # Saved PPO models, normalization stats, and evaluation metrics
 ├── models/                  # Vendored Gazebo Fuel models used by custom worlds
 ├── worlds/                  # Gazebo world files

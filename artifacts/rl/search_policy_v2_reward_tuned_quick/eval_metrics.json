@@ -1,0 +1,10 @@
+{
+  "episodes": 20,
+  "mean_reward": 357.7501950158738,
+  "success_rate": 0.7,
+  "mean_coverage": 0.7355000033974648,
+  "mean_confirmed_targets": 4.1,
+  "mean_steps": 33.5,
+  "false_investigation_rate": 0.0,
+  "mean_time_to_first_confirm_step": 9.411764705882353
+}

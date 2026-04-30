@@ -8,8 +8,8 @@ Built from `docker/Dockerfile`, single-stage, one image reused by the sim, detec
 
 - `sim` — PX4 SITL, Gazebo, ROS bridge, Foxglove, pose/TF helpers
 - `detection` — YOLO inference node subscribed to `/camera/image_raw` and fused with `/camera/depth/image_raw`
-- `planning` — mission controller that drives takeoff, either grid or PPO search, and investigation
-- `training` — task-level Gymnasium environment plus Stable-Baselines3 PPO training
+- `planning` — mission controller that drives takeoff, either grid or learned RL search, and investigation
+- `training` — V2 belief-map Gymnasium environment plus Stable-Baselines3 DQN training
 
 - Ubuntu 24.04 (Noble) via `px4io/px4-sitl-gazebo`
 - ROS 2 Jazzy Jalisco
@@ -67,7 +67,7 @@ docker compose logs -f sim
 # Follow detection logs
 docker compose logs -f detection
 
-# Run PPO training
+# Run V2 DQN training
 docker compose run --rm training
 
 # Open a shell inside the running sim container
@@ -81,7 +81,7 @@ The entrypoint seeds `config.env` from `config.env.docker` on first run if the u
 
 The detection container launches `scripts/launch_detection.bash`, which runs the detector directly from [`src/uav_detection`](/Users/nicknationwide/uav-search-project/src/uav_detection) using `PYTHONPATH`. That keeps iteration simple and avoids `ament_python` editable-install issues in the container runtime.
 
-The planning container launches `scripts/launch_planning.bash`, which controls PX4 through MAVSDK and honors `SEARCH_POLICY=grid|rl` plus `RL_MODEL_PATH`, `RL_VECNORMALIZE_PATH`, `RL_DECISION_PERIOD_S`, `RL_MAX_STEP_XY_M`, and `RL_COVERAGE_GRID_SIDE`.
+The planning container launches `scripts/launch_planning.bash`, which controls PX4 through MAVSDK and honors `SEARCH_POLICY=grid|rl`. The default search altitude is `GRID_ALTITUDE=-4.0` NED to keep upright person targets larger in the forward RGBD camera. The default RL path is V2 DQN (`RL_POLICY_VERSION=v2`, `RL_ALGORITHM=dqn`) with `RL_ARTIFACT_DIR`, `RL_MODEL_PATH`, `RL_DECISION_PERIOD_S`, `RL_CELL_SIZE_M`, and `RL_PATCH_SIDE`. Legacy PPO remains selectable with `RL_POLICY_VERSION=v1`.
 
 The sim launcher starts a PX4 MAVLink UDP stream to the `planning` service by default; override `MAVSDK_SYSTEM_ADDRESS`, `MAVSDK_MAVLINK_TARGET`, or `ENABLE_MAVSDK_MAVLINK=0` if you run the controller somewhere else.
 
@@ -93,7 +93,7 @@ bash scripts/smoke_mavsdk_sitl.bash
 
 That smoke test boots SITL, connects MAVSDK, arms, climbs to `-10m` NED down, commands a short grid segment, verifies the telemetry trace reached each commanded waypoint in order, then lands.
 
-The training container launches `scripts/launch_training.bash`, defaulting to [`src/uav_rl/config/search_policy.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy.yaml) and writing artifacts into [`artifacts/rl/search_policy`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy).
+The training container launches `scripts/launch_training.bash`, defaulting to [`src/uav_rl/config/search_policy_v2.yaml`](/Users/nicknationwide/uav-search-project/src/uav_rl/config/search_policy_v2.yaml) and writing artifacts into [`artifacts/rl/search_policy_v2`](/Users/nicknationwide/uav-search-project/artifacts/rl/search_policy_v2). Set `RL_POLICY_VERSION=v1` to run the legacy PPO trainer.
 
 ## Fast Gazebo episode reset
 

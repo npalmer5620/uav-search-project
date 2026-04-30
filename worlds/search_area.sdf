@@ -83,41 +83,41 @@
       <static>true</static>
     </include>
 
-    <!-- Triage victims: humanoid models rotated 90 degrees onto their side. -->
+    <!-- Triage victims kept upright for reliable first-pass YOLO person detections. -->
     <include>
       <uri>model://casual female</uri>
-      <name>victim_prone_01</name>
-      <pose>3 -16 0.35 1.5708 0 -0.25</pose>
+      <name>victim_standing_01</name>
+      <pose>3 -16 0 0 0 -0.25</pose>
       <static>true</static>
     </include>
     <include>
       <uri>model://malevisitoronphone</uri>
-      <name>victim_prone_02</name>
-      <pose>-14 -4 0.35 1.5708 0 1.1</pose>
+      <name>victim_standing_02</name>
+      <pose>-14 -4 0 0 0 1.1</pose>
       <static>true</static>
     </include>
     <include>
       <uri>model://walking person</uri>
-      <name>victim_prone_03</name>
-      <pose>28 3 0.35 1.5708 0 2.4</pose>
+      <name>victim_standing_03</name>
+      <pose>28 3 0 0 0 2.4</pose>
       <static>true</static>
     </include>
     <include>
       <uri>model://casual female</uri>
-      <name>victim_prone_04</name>
-      <pose>-30 18 0.35 1.5708 0 -2.6</pose>
+      <name>victim_standing_04</name>
+      <pose>-30 18 0 0 0 -2.6</pose>
       <static>true</static>
     </include>
     <include>
       <uri>model://malevisitoronphone</uri>
-      <name>victim_prone_05</name>
-      <pose>11 22 0.35 1.5708 0 0.45</pose>
+      <name>victim_standing_05</name>
+      <pose>11 22 0 0 0 0.45</pose>
       <static>true</static>
     </include>
     <include>
       <uri>model://walking person</uri>
-      <name>victim_prone_06</name>
-      <pose>-22 -24 0.35 1.5708 0 -1.55</pose>
+      <name>victim_standing_06</name>
+      <pose>-22 -24 0 0 0 -1.55</pose>
       <static>true</static>
     </include>
 

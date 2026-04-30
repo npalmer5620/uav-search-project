@@ -1,0 +1,63 @@
+env:
+  width: 24.0
+  height: 24.0
+  origin_x: 0.0
+  origin_y: 0.0
+  cell_size_m: 4.0
+  patch_side: 11
+  fixed_altitude_ned: -4.0
+  scan_yaw_step_rad: 0.436332313
+  max_yaw_step_rad: 0.436332313
+  decision_period_s: 2.0
+  search_speed_m_s: 2.0
+  max_episode_steps: 96
+  required_target_count: 1
+  target_count: 1
+  world_path: worlds/search_area.sdf
+  randomize_start: false
+  altitude_jitter_m: 0.0
+  obstacle_count: 0
+  detection_probability: 0.85
+  investigate_detection_probability: 0.98
+  false_positive_rate: 0.0
+  detection_noise_m: 0.15
+  min_target_spacing_m: 4.0
+  camera:
+    horizontal_fov_rad: 1.274
+    image_width_px: 640
+    image_height_px: 480
+    depth_near_m: 0.2
+    depth_far_m: 19.1
+    target_height_m: 1.4
+  reward:
+    immediate_backtrack_penalty: 6.0
+    reverse_move_penalty: 1.0
+    shielded_action_penalty: 8.0
+
+dqn:
+  policy: MlpPolicy
+  seed: 7
+  learning_rate: 0.0001
+  buffer_size: 100000
+  learning_starts: 5000
+  batch_size: 128
+  tau: 1.0
+  gamma: 0.99
+  train_freq: 4
+  gradient_steps: 1
+  target_update_interval: 1000
+  exploration_fraction: 0.25
+  exploration_initial_eps: 1.0
+  exploration_final_eps: 0.05
+
+train:
+  total_timesteps: 50000
+  eval_episodes: 20
+  baseline_episodes: 50
+  progress_eval_episodes: 5
+  progress_eval_interval_timesteps: 50000
+  log_interval: 10
+  verbose: 1
+  curriculum: []
+  artifact_dir: artifacts/rl/search_policy_v2_stage1_snapshot
+  tensorboard_log: artifacts/rl/tensorboard_v2

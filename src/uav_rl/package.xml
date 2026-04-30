@@ -3,7 +3,7 @@
 <package format="3">
   <name>uav_rl</name>
   <version>0.1.0</version>
-  <description>Gymnasium task environment and PPO-backed search policy for the UAV search simulation</description>
+  <description>Gymnasium task environments and learned search policies for the UAV search simulation</description>
   <maintainer email="todo@todo.com">uav-search-project</maintainer>
   <license>TODO</license>
 

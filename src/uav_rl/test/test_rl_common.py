@@ -13,9 +13,9 @@ from uav_rl.rl_common import (
 
 def test_load_world_target_classes_matches_search_area_mix():
     classes = load_world_target_classes(None)
-    assert len(classes) == 5
-    assert classes.count("person") == 3
-    assert classes.count("car") == 2
+    assert len(classes) == 13
+    assert classes.count("person") == 12
+    assert classes.count("car") == 1
 
 
 def test_coverage_map_marks_new_cells_once():

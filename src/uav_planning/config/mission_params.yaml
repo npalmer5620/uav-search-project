@@ -6,7 +6,7 @@ mission_controller:
       height: 40.0
       spacing: 5.0
       speed: 2.0
-      altitude: -10.0
+      altitude: -4.0
       origin_x: 0.0
       origin_y: 0.0
     detection_confidence_threshold: 0.6

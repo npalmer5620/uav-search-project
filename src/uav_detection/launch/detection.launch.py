@@ -40,7 +40,37 @@ def generate_launch_description():
     publish_3d_arg = DeclareLaunchArgument(
         "publish_3d",
         default_value="true",
-        description="Fuse detections with depth and publish /detections_3d.",
+        description="Publish localized target estimates to /detections_3d.",
+    )
+    depth_localization_enabled_arg = DeclareLaunchArgument(
+        "depth_localization_enabled",
+        default_value="false",
+        description="Use depth-image localization when ground-plane projection is unavailable.",
+    )
+    ground_projection_fallback_arg = DeclareLaunchArgument(
+        "ground_projection_fallback",
+        default_value="true",
+        description="Raycast bbox footpoints onto the ground plane for RGB-only localization.",
+    )
+    prefer_ground_projection_arg = DeclareLaunchArgument(
+        "prefer_ground_projection",
+        default_value="true",
+        description="Use RGB bbox ground-plane projection before depth when publishing /detections_3d.",
+    )
+    ground_plane_z_arg = DeclareLaunchArgument(
+        "ground_plane_z",
+        default_value="0.0",
+        description="World-frame ENU Z value of the ground plane used for RGB-only localization.",
+    )
+    ground_projection_max_range_arg = DeclareLaunchArgument(
+        "ground_projection_max_range_m",
+        default_value="35.0",
+        description="Maximum acceptable raycast range for RGB-only ground-plane localization.",
+    )
+    bbox_ground_y_fraction_arg = DeclareLaunchArgument(
+        "bbox_ground_y_fraction",
+        default_value="1.0",
+        description="Vertical bbox fraction used as ground footpoint; 1.0 means bottom center.",
     )
 
     detection_node = Node(
@@ -60,6 +90,12 @@ def generate_launch_description():
             "publish_viz": LaunchConfiguration("publish_viz"),
             "publish_3d": LaunchConfiguration("publish_3d"),
             "world_frame": "map",
+            "depth_localization_enabled": LaunchConfiguration("depth_localization_enabled"),
+            "ground_projection_fallback": LaunchConfiguration("ground_projection_fallback"),
+            "prefer_ground_projection": LaunchConfiguration("prefer_ground_projection"),
+            "ground_plane_z": LaunchConfiguration("ground_plane_z"),
+            "ground_projection_max_range_m": LaunchConfiguration("ground_projection_max_range_m"),
+            "bbox_ground_y_fraction": LaunchConfiguration("bbox_ground_y_fraction"),
         }],
     )
 
@@ -71,5 +107,11 @@ def generate_launch_description():
         frame_skip_arg,
         publish_viz_arg,
         publish_3d_arg,
+        depth_localization_enabled_arg,
+        ground_projection_fallback_arg,
+        prefer_ground_projection_arg,
+        ground_plane_z_arg,
+        ground_projection_max_range_arg,
+        bbox_ground_y_fraction_arg,
         detection_node,
     ])

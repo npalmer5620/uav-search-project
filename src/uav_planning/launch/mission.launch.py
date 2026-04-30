@@ -16,7 +16,7 @@ def generate_launch_description():
                               description="Distance between parallel passes in meters."),
         DeclareLaunchArgument("grid_speed", default_value="2.0",
                               description="Linear flight speed during grid search in m/s."),
-        DeclareLaunchArgument("altitude", default_value="-10.0",
+        DeclareLaunchArgument("altitude", default_value="-4.0",
                               description="Search altitude in NED (negative = up)."),
         DeclareLaunchArgument("grid_origin_x", default_value="0.0",
                               description="Grid center X (North) in NED meters."),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""YOLO detector with optional depth fusion for 3D target localization."""
+"""YOLO detector with depth or ground-plane 3D target localization."""
 
 import math
 from typing import Optional
@@ -69,8 +69,86 @@ def quat_xyzw_to_rotmat(quat: Quaternion) -> np.ndarray:
     ])
 
 
+def intersect_ray_with_horizontal_plane(
+    origin: np.ndarray,
+    direction: np.ndarray,
+    plane_z: float,
+    *,
+    min_distance_m: float,
+    max_distance_m: float,
+) -> tuple[np.ndarray, float] | None:
+    """Intersect a world-frame ray with a horizontal plane."""
+    direction_z = float(direction[2])
+    if abs(direction_z) < 1e-6:
+        return None
+
+    t = (float(plane_z) - float(origin[2])) / direction_z
+    if not math.isfinite(t) or t <= 0.0:
+        return None
+
+    point = origin + direction * t
+    distance = float(np.linalg.norm(point - origin))
+    if distance < min_distance_m or distance > max_distance_m:
+        return None
+
+    return point, distance
+
+
+def project_bbox_footpoint_to_horizontal_plane(
+    *,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    image_width: int,
+    image_height: int,
+    fx: float,
+    fy: float,
+    cx: float,
+    cy: float,
+    camera_origin_world: np.ndarray,
+    camera_rotation_world: np.ndarray,
+    plane_z: float,
+    min_distance_m: float,
+    max_distance_m: float,
+    bbox_ground_y_fraction: float = 1.0,
+) -> tuple[np.ndarray, float] | None:
+    """Raycast a bbox footpoint from optical camera frame to a horizontal plane."""
+    if fx == 0.0 or fy == 0.0:
+        return None
+
+    clamped_fraction = min(1.0, max(0.0, float(bbox_ground_y_fraction)))
+    u = min(max((x1 + x2) * 0.5, 0.0), float(max(0, image_width - 1)))
+    bbox_v = y1 + (y2 - y1) * clamped_fraction
+    v = min(max(bbox_v, 0.0), float(max(0, image_height - 1)))
+
+    ray_camera = np.array([
+        (u - cx) / fx,
+        (v - cy) / fy,
+        1.0,
+    ], dtype=float)
+    ray_camera_norm = np.linalg.norm(ray_camera)
+    if ray_camera_norm <= 0.0:
+        return None
+    ray_camera /= ray_camera_norm
+
+    ray_world = camera_rotation_world @ ray_camera
+    ray_world_norm = np.linalg.norm(ray_world)
+    if ray_world_norm <= 0.0:
+        return None
+    ray_world /= ray_world_norm
+
+    return intersect_ray_with_horizontal_plane(
+        camera_origin_world,
+        ray_world,
+        plane_z,
+        min_distance_m=min_distance_m,
+        max_distance_m=max_distance_m,
+    )
+
+
 class DetectionNode(Node):
-    """Run 2D YOLO and fuse with depth to estimate 3D target positions."""
+    """Run 2D YOLO and estimate 3D target positions."""
 
     def __init__(self) -> None:
         super().__init__("detection_node")
@@ -87,6 +165,13 @@ class DetectionNode(Node):
         self.declare_parameter("publish_viz", True)
         self.declare_parameter("publish_3d", True)
         self.declare_parameter("world_frame", "map")
+        self.declare_parameter("depth_localization_enabled", False)
+        self.declare_parameter("ground_projection_fallback", True)
+        self.declare_parameter("prefer_ground_projection", True)
+        self.declare_parameter("ground_plane_z", 0.0)
+        self.declare_parameter("ground_projection_min_range_m", 0.5)
+        self.declare_parameter("ground_projection_max_range_m", 35.0)
+        self.declare_parameter("bbox_ground_y_fraction", 1.0)
 
         model_path = self.get_parameter("model_path").value
         self.confidence_threshold = float(self.get_parameter("confidence").value)
@@ -101,6 +186,28 @@ class DetectionNode(Node):
         self.publish_viz = bool(self.get_parameter("publish_viz").value)
         self.publish_3d = bool(self.get_parameter("publish_3d").value)
         self.world_frame = self.get_parameter("world_frame").value
+        self.depth_localization_enabled = bool(
+            self.get_parameter("depth_localization_enabled").value
+        )
+        self.ground_projection_fallback = bool(
+            self.get_parameter("ground_projection_fallback").value
+        )
+        self.prefer_ground_projection = bool(
+            self.get_parameter("prefer_ground_projection").value
+        )
+        self.ground_plane_z = float(self.get_parameter("ground_plane_z").value)
+        self.ground_projection_min_range_m = max(
+            0.0,
+            float(self.get_parameter("ground_projection_min_range_m").value),
+        )
+        self.ground_projection_max_range_m = max(
+            self.ground_projection_min_range_m,
+            float(self.get_parameter("ground_projection_max_range_m").value),
+        )
+        self.bbox_ground_y_fraction = min(
+            1.0,
+            max(0.0, float(self.get_parameter("bbox_ground_y_fraction").value)),
+        )
 
         self.get_logger().info(f"Loading YOLO model: {model_path} on {device}")
         self.model = YOLO(model_path, task="detect")
@@ -143,7 +250,10 @@ class DetectionNode(Node):
 
         self.get_logger().info(
             "DetectionNode ready — "
-            f"rgb={image_topic}, camera_info={camera_info_topic}, depth={depth_topic}, pose={pose_topic}"
+            f"rgb={image_topic}, camera_info={camera_info_topic}, depth={depth_topic}, pose={pose_topic}, "
+            f"depth_localization_enabled={self.depth_localization_enabled}, "
+            f"ground_projection_fallback={self.ground_projection_fallback}, "
+            f"prefer_ground_projection={self.prefer_ground_projection}"
         )
 
     def camera_info_callback(self, msg: CameraInfo) -> None:
@@ -210,6 +320,8 @@ class DetectionNode(Node):
 
         annotated = frame.copy()
         detections_found = 0
+        depth_localized = 0
+        ground_localized = 0
 
         for box in results.boxes:
             class_id = int(box.cls[0])
@@ -239,26 +351,65 @@ class DetectionNode(Node):
 
             point_world = None
             depth_m = None
+            range_m = None
+            localization_source = ""
             if self.publish_3d:
-                depth_m = self.sample_depth(cx, cy, frame.shape[1], frame.shape[0])
-                if depth_m is not None:
-                    point_world = self.project_pixel_to_world(cx, cy, depth_m)
-                    if point_world is not None:
-                        det3d = self.make_detection_3d(
+                ground_projection = None
+                if self.ground_projection_fallback:
+                    ground_projection = self.project_bbox_to_ground_plane(
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        frame.shape[1],
+                        frame.shape[0],
+                    )
+
+                if self.prefer_ground_projection and ground_projection is not None:
+                    point_world, range_m = ground_projection
+                    localization_source = "ground"
+
+                if point_world is None and self.depth_localization_enabled:
+                    depth_m = self.sample_depth(cx, cy, frame.shape[1], frame.shape[0])
+                    if depth_m is not None:
+                        point_world = self.project_pixel_to_world(cx, cy, depth_m)
+                        range_m = depth_m
+                        localization_source = "depth"
+
+                if point_world is None and ground_projection is not None:
+                    point_world, range_m = ground_projection
+                    localization_source = "ground"
+
+                if point_world is not None and range_m is not None:
+                    det3d = self.make_detection_3d(
+                        msg.header.stamp,
+                        class_name,
+                        confidence,
+                        point_world,
+                        range_m,
+                        localization_source,
+                    )
+                    det3d_array.detections.append(det3d)
+                    marker_array.markers.extend(
+                        self.make_markers(
                             msg.header.stamp,
+                            detections_found,
                             class_name,
                             confidence,
+                            range_m,
                             point_world,
-                            depth_m,
+                            localization_source,
                         )
-                        det3d_array.detections.append(det3d)
-                        marker_array.markers.extend(
-                            self.make_markers(msg.header.stamp, detections_found, class_name, confidence, depth_m, point_world)
-                        )
+                    )
+                    if localization_source == "depth":
+                        depth_localized += 1
+                    elif localization_source == "ground":
+                        ground_localized += 1
 
             label = f"{class_name} {confidence:.2f}"
-            if depth_m is not None:
-                label += f" {depth_m:.1f}m"
+            if range_m is not None:
+                suffix = "d" if localization_source == "depth" else "g"
+                label += f" {range_m:.1f}m/{suffix}"
 
             self.draw_detection(annotated, x1, y1, x2, y2, label)
             detections_found += 1
@@ -281,7 +432,8 @@ class DetectionNode(Node):
 
         if detections_found > 0:
             self.get_logger().info(
-                f"{detections_found} target(s) detected, {len(det3d_array.detections)} with depth"
+                f"{detections_found} target(s) detected, {len(det3d_array.detections)} localized "
+                f"(depth={depth_localized}, ground={ground_localized})"
             )
 
     def sample_depth(self, u: float, v: float, rgb_width: int, rgb_height: int) -> Optional[float]:
@@ -339,18 +491,68 @@ class DetectionNode(Node):
         ])
         return trans_world_base + rot_world_base @ point_base
 
+    def project_bbox_to_ground_plane(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        image_width: int,
+        image_height: int,
+    ) -> tuple[np.ndarray, float] | None:
+        """Project bbox footpoint onto the configured ground plane."""
+        if self.camera_info is None or self.latest_uav_pose is None:
+            return None
+
+        fx = float(self.camera_info.k[0])
+        fy = float(self.camera_info.k[4])
+        cx = float(self.camera_info.k[2])
+        cy = float(self.camera_info.k[5])
+        if fx == 0.0 or fy == 0.0:
+            return None
+
+        pose = self.latest_uav_pose.pose
+        rot_world_base = quat_xyzw_to_rotmat(pose.orientation)
+        trans_world_base = np.array([
+            pose.position.x,
+            pose.position.y,
+            pose.position.z,
+        ], dtype=float)
+        camera_origin_world = trans_world_base + rot_world_base @ self.camera_translation_base
+        camera_rotation_world = rot_world_base @ self.camera_rotation_base
+
+        return project_bbox_footpoint_to_horizontal_plane(
+            x1=x1,
+            y1=y1,
+            x2=x2,
+            y2=y2,
+            image_width=image_width,
+            image_height=image_height,
+            fx=fx,
+            fy=fy,
+            cx=cx,
+            cy=cy,
+            camera_origin_world=camera_origin_world,
+            camera_rotation_world=camera_rotation_world,
+            plane_z=self.ground_plane_z,
+            min_distance_m=self.ground_projection_min_range_m,
+            max_distance_m=self.ground_projection_max_range_m,
+            bbox_ground_y_fraction=self.bbox_ground_y_fraction,
+        )
+
     def make_detection_3d(
         self,
         stamp,
         class_name: str,
         confidence: float,
         point_world: np.ndarray,
-        depth_m: float,
+        range_m: float,
+        localization_source: str,
     ) -> Detection3D:
         detection = Detection3D()
         detection.header.stamp = stamp
         detection.header.frame_id = self.world_frame
-        detection.id = ""
+        detection.id = localization_source
 
         hypothesis = ObjectHypothesisWithPose()
         hypothesis.hypothesis.class_id = class_name
@@ -364,9 +566,9 @@ class DetectionNode(Node):
         detection.bbox.center.position.y = float(point_world[1])
         detection.bbox.center.position.z = float(point_world[2])
         detection.bbox.center.orientation.w = 1.0
-        detection.bbox.size.x = max(0.2, depth_m * 0.05)
-        detection.bbox.size.y = max(0.2, depth_m * 0.05)
-        detection.bbox.size.z = max(0.4, depth_m * 0.08)
+        detection.bbox.size.x = max(0.2, range_m * 0.05)
+        detection.bbox.size.y = max(0.2, range_m * 0.05)
+        detection.bbox.size.z = max(0.4, range_m * 0.08)
         return detection
 
     def make_markers(
@@ -375,8 +577,9 @@ class DetectionNode(Node):
         index: int,
         class_name: str,
         confidence: float,
-        depth_m: float,
+        range_m: float,
         point_world: np.ndarray,
+        localization_source: str,
     ) -> list[Marker]:
         sphere = Marker()
         sphere.header.stamp = stamp
@@ -392,9 +595,14 @@ class DetectionNode(Node):
         sphere.scale.x = 0.35
         sphere.scale.y = 0.35
         sphere.scale.z = 0.35
-        sphere.color.r = 0.05
-        sphere.color.g = 0.9
-        sphere.color.b = 0.2
+        if localization_source == "depth":
+            sphere.color.r = 0.05
+            sphere.color.g = 0.9
+            sphere.color.b = 0.2
+        else:
+            sphere.color.r = 0.1
+            sphere.color.g = 0.45
+            sphere.color.b = 1.0
         sphere.color.a = 0.95
 
         text = Marker()
@@ -413,7 +621,7 @@ class DetectionNode(Node):
         text.color.g = 1.0
         text.color.b = 1.0
         text.color.a = 0.95
-        text.text = f"{class_name} {confidence:.2f} {depth_m:.1f}m"
+        text.text = f"{class_name} {confidence:.2f} {range_m:.1f}m {localization_source}"
 
         return [sphere, text]
 

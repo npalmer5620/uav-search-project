@@ -28,13 +28,24 @@ fi
 
 SEARCH_POLICY="${SEARCH_POLICY:-grid}"
 MAVSDK_SYSTEM_ADDRESS="${MAVSDK_SYSTEM_ADDRESS:-udpin://0.0.0.0:14540}"
+RL_POLICY_VERSION="${RL_POLICY_VERSION:-v2}"
+RL_ALGORITHM="${RL_ALGORITHM:-dqn}"
+if [[ -z "${RL_ARTIFACT_DIR:-}" ]]; then
+    if [[ "$RL_POLICY_VERSION" == "v1" ]]; then
+        RL_ARTIFACT_DIR="artifacts/rl/search_policy"
+    else
+        RL_ARTIFACT_DIR="artifacts/rl/search_policy_v2"
+    fi
+fi
 
 # Configurable via config.env (or environment)
 GRID_WIDTH="${GRID_WIDTH:-40.0}"
 GRID_HEIGHT="${GRID_HEIGHT:-40.0}"
 GRID_SPACING="${GRID_SPACING:-5.0}"
 GRID_SPEED="${GRID_SPEED:-2.0}"
-GRID_ALTITUDE="${GRID_ALTITUDE:--10.0}"
+if [[ -z "${GRID_ALTITUDE:-}" ]]; then
+    GRID_ALTITUDE="-4.0"
+fi
 GRID_ORIGIN_X="${GRID_ORIGIN_X:-0.0}"
 GRID_ORIGIN_Y="${GRID_ORIGIN_Y:-0.0}"
 DETECTION_CONFIDENCE="${MISSION_DETECTION_CONFIDENCE:-0.6}"
@@ -52,11 +63,21 @@ TRACKING_MIN_CONFIDENCE="${TRACKING_MIN_CONFIDENCE:-0.65}"
 USE_SIM_TIME="${USE_SIM_TIME:-true}"
 TAKEOFF_TIMEOUT_SECONDS="${TAKEOFF_TIMEOUT_SECONDS:-60.0}"
 HANDOFF_TIMEOUT_SECONDS="${HANDOFF_TIMEOUT_SECONDS:-60.0}"
-RL_MODEL_PATH="${RL_MODEL_PATH:-artifacts/rl/search_policy/model.zip}"
+RL_MODEL_PATH="${RL_MODEL_PATH:-$RL_ARTIFACT_DIR/model.zip}"
 RL_VECNORMALIZE_PATH="${RL_VECNORMALIZE_PATH:-artifacts/rl/search_policy/vecnormalize.pkl}"
-RL_DECISION_PERIOD_S="${RL_DECISION_PERIOD_S:-0.5}"
+if [[ -z "${RL_DECISION_PERIOD_S:-}" ]]; then
+    if [[ "$RL_POLICY_VERSION" == "v2" ]]; then
+        RL_DECISION_PERIOD_S="2.0"
+    else
+        RL_DECISION_PERIOD_S="0.5"
+    fi
+fi
 RL_MAX_STEP_XY_M="${RL_MAX_STEP_XY_M:-4.0}"
+RL_SCAN_YAW_STEP_DEG="${RL_SCAN_YAW_STEP_DEG:-25.0}"
+RL_MAX_YAW_STEP_DEG="${RL_MAX_YAW_STEP_DEG:-25.0}"
 RL_COVERAGE_GRID_SIDE="${RL_COVERAGE_GRID_SIDE:-16}"
+RL_CELL_SIZE_M="${RL_CELL_SIZE_M:-4.0}"
+RL_PATCH_SIDE="${RL_PATCH_SIDE:-11}"
 
 case "$SEARCH_POLICY" in
     grid)
@@ -70,11 +91,18 @@ case "$SEARCH_POLICY" in
         PLANNING_MODULE="uav_rl.rl_mission_controller"
         POLICY_LABEL="rl"
         EXTRA_ARGS=(
+            -p rl.policy_version:="$RL_POLICY_VERSION"
+            -p rl.algorithm:="$RL_ALGORITHM"
+            -p rl.artifact_dir:="$RL_ARTIFACT_DIR"
             -p rl.model_path:="$RL_MODEL_PATH"
             -p rl.vecnormalize_path:="$RL_VECNORMALIZE_PATH"
             -p rl.decision_period_s:="$RL_DECISION_PERIOD_S"
             -p rl.max_step_xy_m:="$RL_MAX_STEP_XY_M"
+            -p rl.scan_yaw_step_deg:="$RL_SCAN_YAW_STEP_DEG"
+            -p rl.max_yaw_step_deg:="$RL_MAX_YAW_STEP_DEG"
             -p rl.coverage_grid_side:="$RL_COVERAGE_GRID_SIDE"
+            -p rl.cell_size_m:="$RL_CELL_SIZE_M"
+            -p rl.patch_side:="$RL_PATCH_SIDE"
         )
         ;;
     *)
@@ -105,11 +133,18 @@ echo "USE_SIM_TIME:         $USE_SIM_TIME"
 echo "TAKEOFF_TIMEOUT:      $TAKEOFF_TIMEOUT_SECONDS"
 echo "HANDOFF_TIMEOUT:      $HANDOFF_TIMEOUT_SECONDS"
 if [[ "$POLICY_LABEL" == "rl" ]]; then
+    echo "RL_POLICY_VERSION:    $RL_POLICY_VERSION"
+    echo "RL_ALGORITHM:         $RL_ALGORITHM"
+    echo "RL_ARTIFACT_DIR:      $RL_ARTIFACT_DIR"
     echo "RL_MODEL_PATH:        $RL_MODEL_PATH"
     echo "RL_VECNORMALIZE:      $RL_VECNORMALIZE_PATH"
     echo "RL_DECISION_PERIOD:   $RL_DECISION_PERIOD_S"
     echo "RL_MAX_STEP_XY:       $RL_MAX_STEP_XY_M"
+    echo "RL_SCAN_YAW_STEP:     $RL_SCAN_YAW_STEP_DEG deg"
+    echo "RL_MAX_YAW_STEP:      $RL_MAX_YAW_STEP_DEG deg"
     echo "RL_COVERAGE_GRID:     $RL_COVERAGE_GRID_SIDE"
+    echo "RL_CELL_SIZE_M:       $RL_CELL_SIZE_M"
+    echo "RL_PATCH_SIDE:        $RL_PATCH_SIDE"
 fi
 echo "=============================="
 

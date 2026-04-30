@@ -1,0 +1,52 @@
+{
+  "random": {
+    "episodes": 100,
+    "mean_reward": 21.16733080502451,
+    "success_rate": 0.08,
+    "mean_coverage": 0.528400000706315,
+    "mean_confirmed_targets": 0.85,
+    "mean_steps": 14.91,
+    "false_investigation_rate": 0.012072434607645875,
+    "mean_time_to_first_confirm_step": 13.575757575757576
+  },
+  "lawnmower": {
+    "episodes": 100,
+    "mean_reward": 4.729566555790602,
+    "success_rate": 0.0,
+    "mean_coverage": 0.3844000001251697,
+    "mean_confirmed_targets": 0.51,
+    "mean_steps": 12.02,
+    "false_investigation_rate": 0.0,
+    "mean_time_to_first_confirm_step": 8.3
+  },
+  "greedy_frontier": {
+    "episodes": 100,
+    "mean_reward": 169.70576151147696,
+    "success_rate": 0.0,
+    "mean_coverage": 0.3170999997854233,
+    "mean_confirmed_targets": 0.17,
+    "mean_steps": 210.25,
+    "false_investigation_rate": 0.0,
+    "mean_time_to_first_confirm_step": 4.733333333333333
+  },
+  "greedy_hybrid": {
+    "episodes": 100,
+    "mean_reward": -64.59847277419651,
+    "success_rate": 0.01,
+    "mean_coverage": 0.46620000019669533,
+    "mean_confirmed_targets": 0.25,
+    "mean_steps": 38.22,
+    "false_investigation_rate": 0.008634222919937205,
+    "mean_time_to_first_confirm_step": 32.333333333333336
+  },
+  "dqn_policy": {
+    "episodes": 100,
+    "mean_reward": 309.1737198611731,
+    "success_rate": 0.62,
+    "mean_coverage": 0.6709999971091747,
+    "mean_confirmed_targets": 3.49,
+    "mean_steps": 20.69,
+    "false_investigation_rate": 0.0,
+    "mean_time_to_first_confirm_step": 8.144736842105264
+  }
+}

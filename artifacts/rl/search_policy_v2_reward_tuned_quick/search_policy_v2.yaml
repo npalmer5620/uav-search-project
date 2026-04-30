@@ -1,0 +1,123 @@
+env:
+  width: 40.0
+  height: 40.0
+  origin_x: 0.0
+  origin_y: 0.0
+  cell_size_m: 4.0
+  patch_side: 11
+  fixed_altitude_ned: -6.0
+  decision_period_s: 2.0
+  search_speed_m_s: 2.0
+  max_episode_steps: 256
+  required_target_count:
+  target_count:
+  world_path: worlds/search_area.sdf
+  randomize_start: true
+  altitude_jitter_m: 0.0
+  obstacle_count: 0
+  detection_probability: 0.85
+  investigate_detection_probability: 0.98
+  false_positive_rate: 0.01
+  detection_noise_m: 0.45
+  min_target_spacing_m: 4.0
+  camera:
+    horizontal_fov_rad: 1.274
+    image_width_px: 640
+    image_height_px: 480
+    depth_near_m: 0.2
+    depth_far_m: 19.1
+    target_height_m: 0.8
+  confirmation:
+    match_distance_m: 2.5
+    max_history: 8
+    track_timeout_steps: 20
+    min_hits: 3
+    min_mean_confidence: 0.65
+    min_viewpoint_separation_m: 4.0
+    min_yaw_span_rad: 0.436332312999
+    max_position_spread_m: 2.0
+  reward:
+    new_observed_cell_reward: 0.2
+    uncertainty_reduction_reward: 0.05
+    useful_reobserve_reward: 3.0
+    confirmed_victim_reward: 60.0
+    mission_success_bonus: 120.0
+    decision_penalty: 0.1
+    useless_revisit_penalty: 2.0
+    false_investigation_penalty: 8.0
+    collision_penalty: 20.0
+    unsafe_altitude_penalty: 20.0
+    out_of_bounds_penalty: 20.0
+    missed_required_target_penalty: 15.0
+
+dqn:
+  policy: MlpPolicy
+  seed: 7
+  learning_rate: 0.0001
+  buffer_size: 100000
+  learning_starts: 5000
+  batch_size: 128
+  tau: 1.0
+  gamma: 0.99
+  train_freq: 4
+  gradient_steps: 1
+  target_update_interval: 1000
+  exploration_fraction: 0.25
+  exploration_initial_eps: 1.0
+  exploration_final_eps: 0.05
+
+train:
+  total_timesteps: 1000000
+  eval_episodes: 20
+  baseline_episodes: 100
+  progress_eval_episodes: 5
+  progress_eval_interval_timesteps: 50000
+  log_interval: 10
+  verbose: 1
+  curriculum:
+    - name: one_target_no_noise
+      total_timesteps: 1
+      env:
+        width: 24.0
+        height: 24.0
+        target_count: 1
+        required_target_count: 1
+        false_positive_rate: 0.0
+        detection_noise_m: 0.15
+        max_episode_steps: 96
+        randomize_start: false
+    - name: multiple_targets_clean
+      total_timesteps: 2
+      env:
+        width: 32.0
+        height: 32.0
+        target_count: 3
+        required_target_count: 2
+        false_positive_rate: 0.0
+        detection_noise_m: 0.25
+        max_episode_steps: 160
+    - name: obstacles_and_false_positives
+      total_timesteps: 3
+      env:
+        width: 36.0
+        height: 36.0
+        target_count: 4
+        required_target_count: 3
+        obstacle_count: 8
+        false_positive_rate: 0.02
+        detection_noise_m: 0.45
+        max_episode_steps: 220
+    - name: full_randomized_task
+      total_timesteps: 4
+      env:
+        width: 40.0
+        height: 40.0
+        target_count:
+        required_target_count: 5
+        obstacle_count: 12
+        false_positive_rate: 0.03
+        detection_noise_m: 0.55
+        altitude_jitter_m: 0.5
+        max_episode_steps: 256
+  artifact_dir: artifacts/rl/search_policy_v2
+  tensorboard_log: artifacts/rl/tensorboard_v2

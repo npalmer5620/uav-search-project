@@ -1,4 +1,4 @@
-"""RL task environment and PPO-backed mission controller."""
+"""RL task environments and mission controller."""
 
 try:
     from gymnasium.envs.registration import register
@@ -11,6 +11,10 @@ if register is not None:  # pragma: no branch
         register(
             id="UavSearchTask-v0",
             entry_point="uav_rl.search_task_env:SearchTaskEnv",
+        )
+        register(
+            id="UavSearchTask-v2",
+            entry_point="uav_rl.search_task_env_v2:SearchTaskEnvV2",
         )
     except Exception:
         pass

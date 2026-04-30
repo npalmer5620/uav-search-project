@@ -28,6 +28,8 @@ class MavsdkStatus:
     velocity_east_m_s: float = 0.0
     velocity_down_m_s: float = 0.0
     position_velocity_valid: bool = False
+    yaw_rad: float = 0.0
+    attitude_valid: bool = False
     last_error: str = ""
 
 
@@ -132,6 +134,7 @@ class MavsdkBackend:
         self._submit(self._watch_flight_mode())
         self._submit(self._watch_health())
         self._submit(self._watch_position_velocity_ned())
+        self._submit(self._watch_attitude_euler())
 
     async def _watch_armed(self) -> None:
         async for armed in self._drone.telemetry.armed():
@@ -174,6 +177,16 @@ class MavsdkBackend:
             self.status.velocity_east_m_s = float(velocity.east_m_s)
             self.status.velocity_down_m_s = float(velocity.down_m_s)
             self.status.position_velocity_valid = True
+            if self._stop_requested:
+                return
+
+    async def _watch_attitude_euler(self) -> None:
+        async for attitude in self._drone.telemetry.attitude_euler():
+            self.status.yaw_rad = math.atan2(
+                math.sin(math.radians(float(attitude.yaw_deg))),
+                math.cos(math.radians(float(attitude.yaw_deg))),
+            )
+            self.status.attitude_valid = True
             if self._stop_requested:
                 return
 

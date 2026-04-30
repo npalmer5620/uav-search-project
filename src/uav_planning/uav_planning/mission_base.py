@@ -118,7 +118,7 @@ class MissionControllerBase(Node):
         self.declare_parameter("grid.height", 40.0)
         self.declare_parameter("grid.spacing", 5.0)
         self.declare_parameter("grid.speed", 2.0)
-        self.declare_parameter("grid.altitude", -10.0)
+        self.declare_parameter("grid.altitude", -4.0)
         self.declare_parameter("grid.origin_x", 0.0)
         self.declare_parameter("grid.origin_y", 0.0)
 
@@ -618,6 +618,9 @@ class MissionControllerBase(Node):
         )
 
     def _current_yaw(self) -> float:
+        status = self.mavsdk_backend.status
+        if status.attitude_valid:
+            return float(status.yaw_rad)
         return 0.0
 
     # -- Visualization --------------------------------------------------------

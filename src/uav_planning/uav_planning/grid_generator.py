@@ -22,7 +22,7 @@ class GridGenerator:
         height: float = 40.0,
         spacing: float = 5.0,
         speed: float = 2.0,
-        altitude: float = -10.0,
+        altitude: float = -4.0,
         origin: tuple[float, float] = (0.0, 0.0),
     ) -> None:
         self.width = width

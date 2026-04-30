@@ -17,7 +17,7 @@ class SpiralGenerator:
         max_radius: float = 20.0,
         spacing: float = 5.0,
         angular_speed: float = 0.3,
-        altitude: float = -10.0,
+        altitude: float = -4.0,
     ) -> None:
         self.max_radius = max_radius
         self.spacing = spacing

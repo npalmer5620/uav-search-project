@@ -1,0 +1,3 @@
+{"eval_episodes": 5, "eval_interval_timesteps": 50000, "event": "stage_start", "num_stages": 4, "stage_index": 1, "stage_name": "one_target_no_noise"}
+{"elapsed_wall_s": 9.101, "episodes": 5, "event": "stage_end", "false_investigation_rate": 0.0, "mean_confirmed_targets": 0.2, "mean_coverage": 0.5555555820465088, "mean_reward": -130.50400000661585, "mean_steps": 78.0, "mean_time_to_first_confirm_step": 6.0, "num_stages": 4, "stage_index": 1, "stage_name": "one_target_no_noise", "success_rate": 0.2, "timesteps": 5000, "timesteps_fraction": 0.1}
+{"eval_episodes": 5, "eval_interval_timesteps": 50000, "event": "stage_start", "num_stages": 4, "stage_index": 2, "stage_name": "multiple_targets_clean"}
