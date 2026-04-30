@@ -134,6 +134,7 @@ uav-search-project/
 │   ├── uav_planning/        # Grid-search mission controller and shared PX4 mission base
 │   └── uav_rl/              # Gymnasium env, PPO train/eval scripts, RL mission controller
 ├── artifacts/               # Saved PPO models, normalization stats, and evaluation metrics
+├── models/                  # Vendored Gazebo Fuel models used by custom worlds
 ├── worlds/                  # Gazebo world files
 ├── .gitignore
 └── README.md

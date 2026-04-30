@@ -125,8 +125,8 @@ if [[ -n "${HEADLESS:-}" ]]; then
     export HEADLESS
 fi
 
-# Add our worlds/ directory so PX4/Gazebo can find custom world files
-export GZ_SIM_RESOURCE_PATH="${REPO_DIR}/worlds:${GZ_SIM_RESOURCE_PATH:-}"
+# Add our worlds and vendored model directories so Gazebo can run offline.
+export GZ_SIM_RESOURCE_PATH="${REPO_DIR}/worlds:${REPO_DIR}/models/fuel/openrobotics/models:${GZ_SIM_RESOURCE_PATH:-}"
 
 # World name is used in Gazebo topic paths
 GZ_WORLD="${PX4_GZ_WORLD:-default}"

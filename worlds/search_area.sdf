@@ -32,50 +32,252 @@
     </light>
     <include>
       <uri>
-        https://fuel.gazebosim.org/1.0/OpenRobotics/models/baylands
+        model://baylands
       </uri>
       <name>park</name>
       <pose>205 155 -1 0 0 0</pose>
     </include>
     <include>
       <uri>
-        https://fuel.gazebosim.org/1.0/OpenRobotics/models/Coast Water
+        model://coast water
       </uri>
       <pose relative_to="park">0 0 -2 0 0 0</pose>
     </include>
-    <!-- Detectable objects (COCO classes) for YOLOv11 -->
+    <!-- Detectable objects and triage targets for camera search. -->
 
-    <!-- People -->
+    <!-- Standing / ambulatory people. -->
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Casual female</uri>
-      <name>person_1</name>
+      <uri>model://casual female</uri>
+      <name>person_standing_01</name>
       <pose>8 5 0 0 0 1.57</pose>
       <static>true</static>
     </include>
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/MaleVisitorOnPhone</uri>
-      <name>person_2</name>
+      <uri>model://malevisitoronphone</uri>
+      <name>person_standing_02</name>
       <pose>-5 12 0 0 0 0</pose>
       <static>true</static>
     </include>
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Walking person</uri>
-      <name>person_3</name>
+      <uri>model://walking person</uri>
+      <name>person_walking_01</name>
       <pose>15 -8 0 0 0 2.35</pose>
       <static>true</static>
     </include>
-
-    <!-- Vehicles -->
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/SUV</uri>
-      <name>car_1</name>
-      <pose>20 10 0 0 0 0.78</pose>
+      <uri>model://casual female</uri>
+      <name>person_standing_03</name>
+      <pose>-18 6 0 0 0 -0.65</pose>
       <static>true</static>
     </include>
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback</uri>
-      <name>car_2</name>
-      <pose>-12 -15 0 0 0 3.14</pose>
+      <uri>model://malevisitoronphone</uri>
+      <name>person_standing_04</name>
+      <pose>24 -18 0 0 0 2.85</pose>
+      <static>true</static>
+    </include>
+    <include>
+      <uri>model://walking person</uri>
+      <name>person_walking_02</name>
+      <pose>-26 -10 0 0 0 0.8</pose>
+      <static>true</static>
+    </include>
+
+    <!-- Triage victims: humanoid models rotated 90 degrees onto their side. -->
+    <include>
+      <uri>model://casual female</uri>
+      <name>victim_prone_01</name>
+      <pose>3 -16 0.35 1.5708 0 -0.25</pose>
+      <static>true</static>
+    </include>
+    <include>
+      <uri>model://malevisitoronphone</uri>
+      <name>victim_prone_02</name>
+      <pose>-14 -4 0.35 1.5708 0 1.1</pose>
+      <static>true</static>
+    </include>
+    <include>
+      <uri>model://walking person</uri>
+      <name>victim_prone_03</name>
+      <pose>28 3 0.35 1.5708 0 2.4</pose>
+      <static>true</static>
+    </include>
+    <include>
+      <uri>model://casual female</uri>
+      <name>victim_prone_04</name>
+      <pose>-30 18 0.35 1.5708 0 -2.6</pose>
+      <static>true</static>
+    </include>
+    <include>
+      <uri>model://malevisitoronphone</uri>
+      <name>victim_prone_05</name>
+      <pose>11 22 0.35 1.5708 0 0.45</pose>
+      <static>true</static>
+    </include>
+    <include>
+      <uri>model://walking person</uri>
+      <name>victim_prone_06</name>
+      <pose>-22 -24 0.35 1.5708 0 -1.55</pose>
+      <static>true</static>
+    </include>
+
+    <!-- High-contrast card targets mixed with people for non-person detections. -->
+    <model name="card_upright_red_01">
+      <static>true</static>
+      <pose>6 18 0 0 0 -0.45</pose>
+      <link name="card">
+        <visual name="face">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>1.0 0.06 1.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0.05 0.03 1</ambient>
+            <diffuse>1 0.05 0.03 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>1.0 0.06 1.5</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="card_upright_blue_01">
+      <static>true</static>
+      <pose>-8 24 0 0 0 0.9</pose>
+      <link name="card">
+        <visual name="face">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>1.0 0.06 1.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.02 0.2 1 1</ambient>
+            <diffuse>0.02 0.2 1 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>1.0 0.06 1.5</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="card_upright_yellow_01">
+      <static>true</static>
+      <pose>22 15 0 0 0 -1.25</pose>
+      <link name="card">
+        <visual name="face">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>1.0 0.06 1.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0.85 0.02 1</ambient>
+            <diffuse>1 0.85 0.02 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>1.0 0.06 1.5</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="card_ground_orange_01">
+      <static>true</static>
+      <pose>17 -24 0.02 0 0 0.35</pose>
+      <link name="card">
+        <visual name="face">
+          <geometry>
+            <box>
+              <size>1.4 1.0 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0.32 0.02 1</ambient>
+            <diffuse>1 0.32 0.02 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1.4 1.0 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="card_ground_green_01">
+      <static>true</static>
+      <pose>-32 2 0.02 0 0 -0.8</pose>
+      <link name="card">
+        <visual name="face">
+          <geometry>
+            <box>
+              <size>1.4 1.0 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.05 0.8 0.12 1</ambient>
+            <diffuse>0.05 0.8 0.12 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1.4 1.0 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="card_ground_white_01">
+      <static>true</static>
+      <pose>33 -8 0.02 0 0 1.4</pose>
+      <link name="card">
+        <visual name="face">
+          <geometry>
+            <box>
+              <size>1.4 1.0 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.95 0.95 0.95 1</ambient>
+            <diffuse>0.95 0.95 0.95 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1.4 1.0 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Vehicles -->
+    <include>
+      <uri>model://suv</uri>
+      <name>car_1</name>
+      <pose>20 10 0 0 0 0.78</pose>
       <static>true</static>
     </include>
 

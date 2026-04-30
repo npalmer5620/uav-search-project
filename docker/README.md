@@ -147,7 +147,7 @@ Wipe everything with `docker compose down -v`.
 
 **`MicroXRCEAgent: command not found`** — MicroXRCEAgent is installed to `/usr/local/bin` by the cmake `make install` step. Verify it's on `PATH` inside the container; rerun `ldconfig` if the shared libs aren't found.
 
-**PX4 can't find Gazebo models** — the sim uses `worlds/search_area.sdf` from the bind-mounted repo. `launch_sim.bash` sets `GZ_SIM_RESOURCE_PATH` to include `worlds/`. If you move worlds, update the script.
+**PX4 can't find Gazebo models** — the sim uses `worlds/search_area.sdf` from the bind-mounted repo. `launch_sim.bash` sets `GZ_SIM_RESOURCE_PATH` to include `worlds/` and `models/fuel/openrobotics/models/`, where the Fuel assets used by `search_area` are vendored. If you move worlds or models, update the script.
 
 **Camera rate is lower than requested** — Docker launch now overrides PX4's `mono_cam` model with a repo-owned `640x480` / `visualize=false` variant from `docker/models/mono_cam/model.sdf`, and the default `CAMERA_RATE` is `30`. If Gazebo still runs slower than the requested rate, the remaining limit is renderer / host performance rather than the ROS bridge.
 
