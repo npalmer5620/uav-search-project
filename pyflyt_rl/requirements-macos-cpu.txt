@@ -1,0 +1,14 @@
+# Install order matters for PyFlyt/pybullet. Use scripts/setup_macos_cpu.sh.
+wheel>=0.42
+numpy>=1.26,<3
+PyFlyt==0.29.0
+gymnasium>=1.0,<2
+stable-baselines3>=2.7,<3
+torch>=2.7
+torchvision>=0.22
+ultralytics>=8.3
+opencv-python>=4.9
+PyYAML>=6.0
+pytest>=8.0
+tqdm>=4.66
+rich>=13.0

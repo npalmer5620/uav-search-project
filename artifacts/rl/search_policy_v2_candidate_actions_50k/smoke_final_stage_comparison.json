@@ -1,0 +1,62 @@
+{
+  "dqn_policy": {
+    "episodes": 5,
+    "mean_reward": 153.94480275665222,
+    "success_rate": 0.2,
+    "mean_coverage": 0.5480000019073487,
+    "mean_confirmed_targets": 2.0,
+    "mean_steps": 11.0,
+    "false_investigation_rate": 0.0,
+    "immediate_backtrack_rate": 0.0,
+    "reverse_move_rate": 0.0,
+    "shielded_action_rate": 0.01818181818181818,
+    "mean_backtracks": 0.0,
+    "mean_shielded_actions": 0.2,
+    "mean_time_to_first_confirm_step": 2.5
+  },
+  "random": {
+    "episodes": 5,
+    "mean_reward": 76.13803832486273,
+    "success_rate": 0.0,
+    "mean_coverage": 0.5380000054836274,
+    "mean_confirmed_targets": 1.6,
+    "mean_steps": 8.4,
+    "false_investigation_rate": 0.0,
+    "immediate_backtrack_rate": 0.0,
+    "reverse_move_rate": 0.0,
+    "shielded_action_rate": 0.047619047619047616,
+    "mean_backtracks": 0.0,
+    "mean_shielded_actions": 0.4,
+    "mean_time_to_first_confirm_step": 4.5
+  },
+  "greedy_hybrid": {
+    "episodes": 5,
+    "mean_reward": -70.9645474038422,
+    "success_rate": 0.0,
+    "mean_coverage": 0.45,
+    "mean_confirmed_targets": 0.4,
+    "mean_steps": 12.6,
+    "false_investigation_rate": 0.031746031746031744,
+    "immediate_backtrack_rate": 0.0,
+    "reverse_move_rate": 0.0,
+    "shielded_action_rate": 0.0,
+    "mean_backtracks": 0.0,
+    "mean_shielded_actions": 0.0,
+    "mean_time_to_first_confirm_step": 11.0
+  },
+  "lawnmower": {
+    "episodes": 5,
+    "mean_reward": 215.67768584792321,
+    "success_rate": 0.4,
+    "mean_coverage": 0.5279999911785126,
+    "mean_confirmed_targets": 2.6,
+    "mean_steps": 6.8,
+    "false_investigation_rate": 0.0,
+    "immediate_backtrack_rate": 0.029411764705882353,
+    "reverse_move_rate": 0.0,
+    "shielded_action_rate": 0.029411764705882353,
+    "mean_backtracks": 0.2,
+    "mean_shielded_actions": 0.2,
+    "mean_time_to_first_confirm_step": 2.75
+  }
+}

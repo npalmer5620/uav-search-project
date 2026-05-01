@@ -6,10 +6,12 @@ import pytest
 gym = pytest.importorskip("gymnasium")
 
 from uav_rl.actions import (
+    ACTION_NAMES,
     ActionConfig,
     SearchAction,
     action_to_goal,
     actions_are_opposed,
+    generate_candidate_goals,
     slew_yaw,
 )
 from uav_rl.belief_map import BeliefMap, MapGeometry, CHANNEL_CONFIRMED, CHANNEL_VICTIM_SCORE
@@ -44,22 +46,13 @@ def test_forward_camera_height_visibility_prefers_lower_altitude():
     )
 
 
-def test_action_yaw_rules_and_investigate_standoff():
+def test_candidate_yaw_rules_and_investigate_standoff():
     geometry = MapGeometry(width=40.0, height=40.0, cell_size_m=4.0)
     config = ActionConfig(cell_size_m=4.0, fixed_altitude_ned=-4.0, investigate_standoff_m=8.0)
-
-    east = action_to_goal(
-        action=SearchAction.MOVE_EAST,
-        x=0.0,
-        y=0.0,
-        yaw=0.0,
-        geometry=geometry,
-        config=config,
-    )
-    assert east.x == pytest.approx(0.0)
-    assert east.y == pytest.approx(4.0)
-    assert east.z == pytest.approx(-4.0)
-    assert east.yaw == pytest.approx(math.pi / 2.0)
+    belief = BeliefMap(geometry)
+    camera = ForwardCameraModel()
+    memory = DetectionMemory()
+    belief.mark_visible([geometry.world_to_grid(0.0, 0.0)])
 
     scan = action_to_goal(
         action=SearchAction.HOVER_SCAN,
@@ -68,6 +61,9 @@ def test_action_yaw_rules_and_investigate_standoff():
         yaw=0.0,
         geometry=geometry,
         config=config,
+        belief=belief,
+        memory=memory,
+        camera=camera,
     )
     assert scan.x == pytest.approx(0.0)
     assert scan.y == pytest.approx(0.0)
@@ -82,17 +78,33 @@ def test_action_yaw_rules_and_investigate_standoff():
         drone_yaw=0.0,
     )
     goal = action_to_goal(
-        action=SearchAction.INVESTIGATE_BEST,
+        action=SearchAction.DETECTION_CONFIRM_BEST,
         x=0.0,
         y=0.0,
         yaw=0.0,
         geometry=geometry,
         config=config,
         best_track=memory.best_track(),
+        belief=belief,
+        memory=memory,
+        camera=camera,
     )
-    assert goal.x == pytest.approx(2.0)
-    assert goal.y == pytest.approx(0.0)
-    assert goal.yaw == pytest.approx(0.0)
+    assert goal.name == ACTION_NAMES[SearchAction.DETECTION_CONFIRM_BEST]
+    assert goal.target_xy == pytest.approx((10.0, 0.0))
+    assert math.hypot(goal.x - 10.0, goal.y) >= config.investigate_standoff_m
+    assert goal.yaw == pytest.approx(math.atan2(-goal.y, 10.0 - goal.x))
+
+    candidates = generate_candidate_goals(
+        x=0.0,
+        y=0.0,
+        yaw=0.0,
+        belief=belief,
+        memory=memory,
+        camera=camera,
+        config=config,
+        scan_allowed=False,
+    )
+    assert not candidates[int(SearchAction.HOVER_SCAN)].valid
 
 
 def test_slew_yaw_limits_heading_changes_across_wraparound():
@@ -104,8 +116,8 @@ def test_slew_yaw_limits_heading_changes_across_wraparound():
     limited = slew_yaw(current, target, math.radians(15.0))
 
     assert limited == pytest.approx(math.radians(-175.0))
-    assert actions_are_opposed(SearchAction.MOVE_EAST, SearchAction.MOVE_WEST)
-    assert not actions_are_opposed(-1, SearchAction.MOVE_WEST)
+    assert not actions_are_opposed(SearchAction.FRONTIER_BEST, SearchAction.ESCAPE_STUCK)
+    assert not actions_are_opposed(-1, SearchAction.ESCAPE_STUCK)
 
 
 def test_belief_map_detection_and_confirmation_updates():
@@ -154,7 +166,7 @@ def test_reward_terms_match_total():
     assert reward.total == pytest.approx(expected)
 
 
-def test_env_shields_immediate_backtracking_and_exposes_last_action():
+def test_env_hard_caps_unproductive_hover_scan():
     config = SearchTaskConfigV2(
         width=20.0,
         height=20.0,
@@ -166,6 +178,7 @@ def test_env_shields_immediate_backtracking_and_exposes_last_action():
         false_positive_rate=0.0,
         detection_noise_m=0.0,
         max_episode_steps=16,
+        max_unproductive_scan_streak=2,
         randomize_start=False,
     )
     env = SearchTaskEnvV2(config=config)
@@ -175,21 +188,28 @@ def test_env_shields_immediate_backtracking_and_exposes_last_action():
     )
     assert obs.shape == env.observation_space.shape
 
-    obs, _reward, terminated, truncated, info = env.step(int(SearchAction.MOVE_EAST))
+    all_cells = [
+        (row, col)
+        for row in range(env.geometry.rows)
+        for col in range(env.geometry.cols)
+    ]
+    env.belief.mark_visible(all_cells, uncertainty_drop=1.0)
+
+    _obs, _reward, terminated, truncated, info = env.step(int(SearchAction.HOVER_SCAN))
     assert not terminated
     assert not truncated
-    assert not info["events"]["immediate_backtrack"]
-    assert info["last_action_int"] == int(SearchAction.MOVE_EAST)
-    patch_side = env.obs_config.patch_side + (1 if env.obs_config.patch_side % 2 == 0 else 0)
-    last_action_start = patch_side * patch_side * 6 + 10
-    assert obs[last_action_start + int(SearchAction.MOVE_EAST)] == pytest.approx(1.0)
-
-    _obs, _reward, _terminated, _truncated, info = env.step(int(SearchAction.MOVE_WEST))
-    assert info["events"]["shielded_action"]
-    assert not info["events"]["immediate_backtrack"]
-    assert not info["events"]["reverse_move"]
     assert info["last_action_int"] == int(SearchAction.HOVER_SCAN)
-    assert info["backtrack_count"] == 0
+    assert info["unproductive_scan_streak"] == 1
+    assert info["scan_disabled_count"] == 0
+
+    _obs, _reward, _terminated, _truncated, info = env.step(int(SearchAction.HOVER_SCAN))
+    assert info["unproductive_scan_streak"] == 2
+    assert info["scan_disabled_count"] == 0
+
+    _obs, _reward, _terminated, _truncated, info = env.step(int(SearchAction.HOVER_SCAN))
+    assert info["events"]["shielded_action"]
+    assert "substituted_for_candidate_hover_scan" in info["last_action"]
+    assert info["scan_disabled_count"] == 1
     assert info["shielded_action_count"] == 1
     assert info["reward"]["penalty_shielded_action"] == pytest.approx(1.0)
 

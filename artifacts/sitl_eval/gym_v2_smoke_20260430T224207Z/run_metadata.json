@@ -1,0 +1,21 @@
+{
+  "created_utc": "2026-04-30T22:50:33.804157+00:00",
+  "duration_s": 60.0,
+  "grid_altitude_ned_m": -4.0,
+  "ground_truth_targets": 6,
+  "max_altitude_m": 4.225250244140625,
+  "mean_best_detection_error_m": 0.4032533325561869,
+  "mean_best_report_error_m": 1.0859637104422624,
+  "mission_started": true,
+  "phase": "SEARCH",
+  "policy": "rl",
+  "reason": "",
+  "rl_model_path": "artifacts/rl/search_policy_v2_candidate_actions_50k/model.zip",
+  "run_id": "gym_v2_smoke_20260430T224207Z",
+  "search_path_length_m": 117.64691529233069,
+  "status": "valid",
+  "summary_path": "/Users/nicknationwide/uav-search-project/artifacts/sitl_eval/gym_v2_smoke_20260430T224207Z/summary.json",
+  "targets_detected": 6,
+  "targets_reported": 4,
+  "visible_coverage_fraction": 0.89
+}

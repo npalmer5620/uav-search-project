@@ -25,6 +25,7 @@ setup(
         "console_scripts": [
             "mission_controller = uav_planning.mission_controller:main",
             "mavsdk_smoke_test = uav_planning.mavsdk_smoke_test:main",
+            "sitl_evaluator = uav_planning.sitl_evaluator:main",
         ],
     },
 )

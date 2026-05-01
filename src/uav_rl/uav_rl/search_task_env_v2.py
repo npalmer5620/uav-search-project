@@ -12,11 +12,10 @@ import numpy as np
 
 from uav_rl.actions import (
     ActionConfig,
+    ACTION_NAMES,
     SearchAction,
     action_to_goal,
-    actions_are_opposed,
-    direction_to_action,
-    move_delta,
+    generate_candidate_goals,
     slew_yaw,
 )
 from uav_rl.belief_map import BeliefMap, MapGeometry
@@ -53,6 +52,7 @@ class SearchTaskConfigV2:
     decision_period_s: float = 2.0
     search_speed_m_s: float = 2.0
     max_episode_steps: int = 256
+    max_unproductive_scan_streak: int = 2
     required_target_count: int | None = None
     target_count: int | None = None
     world_path: str | None = None
@@ -164,6 +164,8 @@ class SearchTaskEnvV2(gym.Env):
         self.recent_cells: list[tuple[int, int]] = []
         self.backtrack_count = 0
         self.shielded_action_count = 0
+        self.unproductive_scan_streak = 0
+        self.scan_disabled_count = 0
 
     def _sample_start_state(self) -> tuple[float, float, float, float]:
         if not self.config.randomize_start:
@@ -385,6 +387,8 @@ class SearchTaskEnvV2(gym.Env):
         self.recent_cells = []
         self.backtrack_count = 0
         self.shielded_action_count = 0
+        self.unproductive_scan_streak = 0
+        self.scan_disabled_count = 0
         self.vx = 0.0
         self.vy = 0.0
 
@@ -413,6 +417,7 @@ class SearchTaskEnvV2(gym.Env):
         prev_x = self.x
         prev_y = self.y
         start_cell = self.geometry.world_to_grid(prev_x, prev_y)
+        scan_allowed = self._scan_allowed()
         best_track = self.memory.best_track()
         goal = action_to_goal(
             action=action_int,
@@ -422,16 +427,26 @@ class SearchTaskEnvV2(gym.Env):
             geometry=self.geometry,
             config=self.config.action_config,
             best_track=best_track,
+            belief=self.belief,
+            memory=self.memory,
+            camera=self.camera,
+            scan_allowed=scan_allowed,
+            recent_cells=self.recent_cells,
         )
-        requested_goal_cell = self.geometry.world_to_grid(goal.x, goal.y)
-        shielded_action = (
-            move_delta(action_int) is not None
-            and self.previous_cell is not None
-            and requested_goal_cell == self.previous_cell
-        )
-        if shielded_action:
+        substituted_candidate = "_substituted_for_" in goal.name or not goal.valid
+        if substituted_candidate:
             self.shielded_action_count += 1
-            action_int = int(SearchAction.HOVER_SCAN)
+            if requested_action_int == int(SearchAction.HOVER_SCAN) and not scan_allowed:
+                self.scan_disabled_count += 1
+        requested_goal_cell = self.geometry.world_to_grid(goal.x, goal.y)
+        shielded_backtrack = (
+            self.previous_cell is not None
+            and requested_goal_cell == self.previous_cell
+            and requested_goal_cell != start_cell
+        )
+        if shielded_backtrack:
+            self.shielded_action_count += 1
+            action_int = int(SearchAction.ESCAPE_STUCK)
             goal = action_to_goal(
                 action=action_int,
                 x=self.x,
@@ -440,9 +455,17 @@ class SearchTaskEnvV2(gym.Env):
                 geometry=self.geometry,
                 config=self.config.action_config,
                 best_track=best_track,
+                belief=self.belief,
+                memory=self.memory,
+                camera=self.camera,
+                scan_allowed=scan_allowed,
+                recent_cells=self.recent_cells,
             )
-        action_is_move = move_delta(action_int) is not None
-        reverse_move = actions_are_opposed(self.last_move_action_int, action_int)
+        shielded_action = substituted_candidate or shielded_backtrack
+        selected_scan = (
+            requested_action_int == int(SearchAction.HOVER_SCAN)
+            and goal.name == ACTION_NAMES[SearchAction.HOVER_SCAN]
+        )
         self.x = goal.x
         self.y = goal.y
         if self.config.max_yaw_step_rad > 0.0:
@@ -457,6 +480,7 @@ class SearchTaskEnvV2(gym.Env):
         self.belief.age(self.config.decision_period_s)
 
         current_cell = self.geometry.world_to_grid(self.x, self.y)
+        action_is_move = current_cell != start_cell
         immediate_backtrack = (
             action_is_move
             and self.previous_cell is not None
@@ -469,8 +493,9 @@ class SearchTaskEnvV2(gym.Env):
         min_ground, max_ground = self.camera.ground_visibility_band(self.z)
         unsafe_altitude = min_ground >= max_ground
 
-        investigating = action_int == int(SearchAction.INVESTIGATE_BEST)
+        investigating = "detection_confirm" in goal.name
         had_track_for_investigation = investigating and best_track is not None
+        prev_unconfirmed_tracks = self.memory.unconfirmed_count()
         new_cells, uncertainty_reduction, useful_reobs, confirmation_delta = self._observe(
             investigating=investigating
         )
@@ -483,6 +508,18 @@ class SearchTaskEnvV2(gym.Env):
         )
         if investigating and best_track is not None:
             best_track.investigated = True
+
+        new_track_created = self.memory.unconfirmed_count() > prev_unconfirmed_tracks
+        productive_scan = selected_scan and (
+            new_cells > 0 or useful_reobs > 0 or new_confirmed > 0 or new_track_created
+        )
+        if selected_scan:
+            if productive_scan:
+                self.unproductive_scan_streak = 0
+            else:
+                self.unproductive_scan_streak += 1
+        elif action_is_move:
+            self.unproductive_scan_streak = 0
 
         useless_revisit = (
             new_cells == 0
@@ -508,7 +545,7 @@ class SearchTaskEnvV2(gym.Env):
             useless_revisit=useless_revisit,
             false_investigation=false_investigation,
             immediate_backtrack=immediate_backtrack,
-            reverse_move=reverse_move,
+            reverse_move=False,
             shielded_action=shielded_action,
             collision=collision,
             unsafe_altitude=unsafe_altitude,
@@ -546,6 +583,8 @@ class SearchTaskEnvV2(gym.Env):
             "last_action_int": self.last_action_int,
             "backtrack_count": self.backtrack_count,
             "shielded_action_count": self.shielded_action_count,
+            "unproductive_scan_streak": self.unproductive_scan_streak,
+            "scan_disabled_count": self.scan_disabled_count,
             "reward": reward_breakdown or {},
             "events": asdict(events) if events is not None else {},
             "targets": [
@@ -556,19 +595,34 @@ class SearchTaskEnvV2(gym.Env):
 
     def action_toward(self, target: tuple[float, float] | None) -> int:
         if target is None:
-            return int(SearchAction.HOVER_SCAN)
-        return int(direction_to_action(target[0] - self.x, target[1] - self.y))
+            return int(SearchAction.HIGH_INFO_BEST)
+        candidates = generate_candidate_goals(
+            x=self.x,
+            y=self.y,
+            yaw=self.yaw,
+            belief=self.belief,
+            memory=self.memory,
+            camera=self.camera,
+            config=self.config.action_config,
+            scan_allowed=self._scan_allowed(),
+            recent_cells=self.recent_cells,
+        )
+        ranked = [
+            (idx, math.hypot(goal.x - target[0], goal.y - target[1]))
+            for idx, goal in enumerate(candidates)
+            if goal.valid and idx != int(SearchAction.HOVER_SCAN)
+        ]
+        if not ranked:
+            return int(SearchAction.HIGH_INFO_BEST)
+        return min(ranked, key=lambda item: item[1])[0]
 
     def greedy_frontier_action(self) -> int:
-        return self.action_toward(self.belief.nearest_frontier(self.x, self.y))
+        return int(SearchAction.FRONTIER_BEST)
 
     def greedy_hybrid_action(self) -> int:
         best_track = self.memory.best_track()
         if best_track is not None and best_track.mean_confidence >= 0.55:
-            if best_track.hits >= 1:
-                return int(SearchAction.INVESTIGATE_BEST)
-            tx, ty, _tz = best_track.filtered_position
-            return self.action_toward((tx, ty))
+            return int(SearchAction.DETECTION_CONFIRM_BEST)
         best_cell = self.belief.best_victim_cell(self.x, self.y)
         if best_cell is not None:
             return self.action_toward(best_cell)
@@ -580,12 +634,18 @@ class SearchTaskEnvV2(gym.Env):
         y_min, y_max = self.geometry.y_limits
         eastbound = row % 2 == 0
         if eastbound and self.y < y_max - self.config.cell_size_m:
-            return int(SearchAction.MOVE_EAST)
+            return self.action_toward((self.x, self.y + self.config.cell_size_m))
         if not eastbound and self.y > y_min + self.config.cell_size_m:
-            return int(SearchAction.MOVE_WEST)
+            return self.action_toward((self.x, self.y - self.config.cell_size_m))
         if self.x < x_max - self.config.cell_size_m:
-            return int(SearchAction.MOVE_NORTH)
-        return int(SearchAction.HOVER_SCAN)
+            return self.action_toward((self.x + self.config.cell_size_m, self.y))
+        return int(SearchAction.RETURN_CENTER)
+
+    def _scan_allowed(self) -> bool:
+        return self.unproductive_scan_streak < max(
+            0,
+            int(self.config.max_unproductive_scan_streak),
+        )
 
     def render(self) -> None:
         return None

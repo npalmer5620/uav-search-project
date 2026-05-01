@@ -1,0 +1,5 @@
+{"elapsed_s": 0.0, "run_dir": "/workspace/artifacts/sitl_eval/smoke_terminal_done", "search_bounds_only": true, "sim_time_s": 0.0, "target_count": 6, "target_filter": "people", "type": "evaluator_started", "world_path": "worlds/search_area.sdf"}
+{"detections": 2, "elapsed_s": 0.0, "false": 2, "matched": 0, "sim_time_s": 0.0, "type": "detections"}
+{"detections": 2, "elapsed_s": 0.0, "false": 2, "matched": 0, "sim_time_s": 0.0, "type": "detections"}
+{"controller": "mission_controller", "elapsed_s": 0.0, "new_phase": "DONE", "old_phase": "UNKNOWN", "sim_time_s": 0.0, "type": "phase"}
+{"elapsed_s": 0.0, "sim_time_s": 0.0, "targets_detected": 0, "targets_reported": 0, "type": "evaluator_finished"}

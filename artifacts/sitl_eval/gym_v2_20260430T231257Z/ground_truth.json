@@ -1,0 +1,74 @@
+[
+  {
+    "class_name": "person",
+    "enu_x": 8.0,
+    "enu_y": 5.0,
+    "enu_z": 0.0,
+    "in_search_area": true,
+    "is_victim": false,
+    "name": "person_standing_01",
+    "ned_x": 5.0,
+    "ned_y": 8.0,
+    "target_id": 0
+  },
+  {
+    "class_name": "person",
+    "enu_x": -5.0,
+    "enu_y": 12.0,
+    "enu_z": 0.0,
+    "in_search_area": true,
+    "is_victim": false,
+    "name": "person_standing_02",
+    "ned_x": 12.0,
+    "ned_y": -5.0,
+    "target_id": 1
+  },
+  {
+    "class_name": "person",
+    "enu_x": 15.0,
+    "enu_y": -8.0,
+    "enu_z": 0.0,
+    "in_search_area": true,
+    "is_victim": false,
+    "name": "person_walking_01",
+    "ned_x": -8.0,
+    "ned_y": 15.0,
+    "target_id": 2
+  },
+  {
+    "class_name": "person",
+    "enu_x": -18.0,
+    "enu_y": 6.0,
+    "enu_z": 0.0,
+    "in_search_area": true,
+    "is_victim": false,
+    "name": "person_standing_03",
+    "ned_x": 6.0,
+    "ned_y": -18.0,
+    "target_id": 3
+  },
+  {
+    "class_name": "person",
+    "enu_x": 3.0,
+    "enu_y": -16.0,
+    "enu_z": 0.0,
+    "in_search_area": true,
+    "is_victim": true,
+    "name": "victim_standing_01",
+    "ned_x": -16.0,
+    "ned_y": 3.0,
+    "target_id": 6
+  },
+  {
+    "class_name": "person",
+    "enu_x": -14.0,
+    "enu_y": -4.0,
+    "enu_z": 0.0,
+    "in_search_area": true,
+    "is_victim": true,
+    "name": "victim_standing_02",
+    "ned_x": -4.0,
+    "ned_y": -14.0,
+    "target_id": 7
+  }
+]

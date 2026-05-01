@@ -1,0 +1,21 @@
+{
+  "created_utc": "2026-04-30T17:40:37.104599+00:00",
+  "duration_s": 90.0,
+  "grid_altitude_ned_m": -4.0,
+  "ground_truth_targets": 6,
+  "max_altitude_m": 4.226116180419922,
+  "mean_best_detection_error_m": 0.2762181021930132,
+  "mean_best_report_error_m": 1.4278812587450256,
+  "mission_started": true,
+  "phase": "SEARCH",
+  "policy": "rl",
+  "reason": "",
+  "rl_model_path": "artifacts/rl/search_policy_v2_candidate_actions_50k/model.zip",
+  "run_id": "compare_rl_90s_20260430T173015Z",
+  "search_path_length_m": 231.58475334492925,
+  "status": "valid",
+  "summary_path": "/Users/nicknationwide/uav-search-project/artifacts/sitl_eval/compare_rl_90s_20260430T173015Z/summary.json",
+  "targets_detected": 6,
+  "targets_reported": 3,
+  "visible_coverage_fraction": 0.96
+}

@@ -1,0 +1,18 @@
+{
+  "source_policy_dir": "artifacts/rl/search_policy_v2_candidate_actions_50k",
+  "tensorboard_run": "artifacts/rl/tensorboard_v2/DQN_11",
+  "training_png": "artifacts/rl/visualizations/candidate_actions_50k/training_curves.png",
+  "reward_early_10_mean": 35.86473903656006,
+  "reward_late_10_mean": 341.0949768066406,
+  "loss_early_10_mean": 13.209633255004883,
+  "loss_late_10_mean": 15.978992366790772,
+  "rollout_final_png": "artifacts/rl/visualizations/candidate_actions_50k/gym_rollout_seed3_final.png",
+  "rollout_gif": "artifacts/rl/visualizations/candidate_actions_50k/gym_rollout_seed3.gif",
+  "rollout_seed": 3,
+  "rollout_steps": 27,
+  "rollout_confirmed": 6,
+  "rollout_required": 5,
+  "rollout_coverage": 0.800000011920929,
+  "rollout_cumulative_reward": 567.4644306471944,
+  "summary_path": "artifacts/rl/visualizations/candidate_actions_50k/visualization_summary.json"
+}

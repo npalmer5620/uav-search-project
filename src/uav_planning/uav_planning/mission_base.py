@@ -145,6 +145,7 @@ class MissionControllerBase(Node):
         self.declare_parameter("takeoff_timeout_seconds", 60.0)
         self.declare_parameter("handoff_timeout_seconds", 60.0)
         self.declare_parameter("mavsdk.system_address", "udpin://0.0.0.0:14540")
+        self.declare_parameter("mavsdk.require_full_health", False)
 
         self.declare_parameter("preflight_ticks", 20)
         self.declare_parameter("takeoff_ticks", 150)
@@ -230,6 +231,9 @@ class MissionControllerBase(Node):
         self.mavsdk_system_address = str(
             self.get_parameter("mavsdk.system_address").value
         ).strip()
+        self.mavsdk_require_full_health = bool(
+            self.get_parameter("mavsdk.require_full_health").value
+        )
         self.mavsdk_backend = MavsdkBackend(
             system_address=self.mavsdk_system_address,
             logger=self.get_logger(),
@@ -293,6 +297,7 @@ class MissionControllerBase(Node):
             f"tracking_min_confidence={self.tracking_min_confidence}, "
             "flight_control=mavsdk, "
             f"mavsdk_system_address={self.mavsdk_system_address}, "
+            f"mavsdk_require_full_health={self.mavsdk_require_full_health}, "
             f"takeoff_timeout={self.takeoff_timeout_s:.1f}s, "
             f"handoff_timeout={self.handoff_timeout_s:.1f}s, "
             "timing_source=ros_clock"
@@ -611,10 +616,13 @@ class MissionControllerBase(Node):
         status = self.mavsdk_backend.status
         if status.last_error:
             return False
+        if not status.connected or not status.position_velocity_valid:
+            return False
+        if self.mavsdk_require_full_health:
+            return status.health_all_ok
         return (
-            status.connected
-            and status.health_all_ok
-            and status.position_velocity_valid
+            status.local_position_ok
+            and (status.global_position_ok or status.home_position_ok)
         )
 
     def _current_yaw(self) -> float:

@@ -89,10 +89,12 @@ services:
       - RL_ARTIFACT_DIR=${RL_ARTIFACT_DIR:-}
       - RL_MODEL_PATH=${RL_MODEL_PATH:-}
       - RL_VECNORMALIZE_PATH=${RL_VECNORMALIZE_PATH:-}
+      - RL_PYFLYT_CONFIG_PATH=${RL_PYFLYT_CONFIG_PATH:-}
       - RL_DECISION_PERIOD_S=${RL_DECISION_PERIOD_S:-}
       - RL_MAX_STEP_XY_M=${RL_MAX_STEP_XY_M:-}
       - RL_SCAN_YAW_STEP_DEG=${RL_SCAN_YAW_STEP_DEG:-}
       - RL_MAX_YAW_STEP_DEG=${RL_MAX_YAW_STEP_DEG:-}
+      - RL_MAX_UNPRODUCTIVE_SCAN_STREAK=${RL_MAX_UNPRODUCTIVE_SCAN_STREAK:-}
       - RL_COVERAGE_GRID_SIDE=${RL_COVERAGE_GRID_SIDE:-}
       - RL_CELL_SIZE_M=${RL_CELL_SIZE_M:-}
       - RL_PATCH_SIDE=${RL_PATCH_SIDE:-}
@@ -104,6 +106,7 @@ services:
       - GRID_ORIGIN_X=${GRID_ORIGIN_X:-}
       - GRID_ORIGIN_Y=${GRID_ORIGIN_Y:-}
       - MAVSDK_SYSTEM_ADDRESS=${MAVSDK_SYSTEM_ADDRESS:-}
+      - MAVSDK_REQUIRE_FULL_HEALTH=${MAVSDK_REQUIRE_FULL_HEALTH:-}
       - MISSION_DETECTION_CONFIDENCE=${MISSION_DETECTION_CONFIDENCE:-}
       - INVESTIGATE_DURATION=${INVESTIGATE_DURATION:-}
       - INVESTIGATE_RADIUS=${INVESTIGATE_RADIUS:-}
@@ -142,6 +145,51 @@ services:
         else
           bash /workspace/scripts/launch_planning.bash
         fi
+
+  evaluator:
+    image: uav-search-sim:latest
+    container_name: uav-evaluator
+    profiles: ["eval"]
+    depends_on:
+      - sim
+      - detection
+      - planning
+
+    tty: true
+    stdin_open: true
+
+    volumes:
+      - ./:/workspace
+      - colcon-build:/workspace/build
+      - colcon-install:/workspace/install
+      - colcon-log:/workspace/log
+
+    environment:
+      - SEARCH_POLICY=${SEARCH_POLICY:-}
+      - RL_MODEL_PATH=${RL_MODEL_PATH:-}
+      - RL_PYFLYT_CONFIG_PATH=${RL_PYFLYT_CONFIG_PATH:-}
+      - RL_CELL_SIZE_M=${RL_CELL_SIZE_M:-}
+      - GRID_WIDTH=${GRID_WIDTH:-}
+      - GRID_HEIGHT=${GRID_HEIGHT:-}
+      - GRID_ORIGIN_X=${GRID_ORIGIN_X:-}
+      - GRID_ORIGIN_Y=${GRID_ORIGIN_Y:-}
+      - USE_SIM_TIME=${USE_SIM_TIME:-}
+      - SITL_EVAL_WORLD_PATH=${SITL_EVAL_WORLD_PATH:-}
+      - SITL_EVAL_OUTPUT_DIR=${SITL_EVAL_OUTPUT_DIR:-}
+      - SITL_EVAL_RUN_ID=${SITL_EVAL_RUN_ID:-}
+      - SITL_EVAL_POLICY_LABEL=${SITL_EVAL_POLICY_LABEL:-}
+      - SITL_EVAL_MODEL_PATH=${SITL_EVAL_MODEL_PATH:-}
+      - SITL_EVAL_TARGET_FILTER=${SITL_EVAL_TARGET_FILTER:-}
+      - SITL_EVAL_SEARCH_BOUNDS_ONLY=${SITL_EVAL_SEARCH_BOUNDS_ONLY:-}
+      - SITL_EVAL_MATCH_RADIUS_M=${SITL_EVAL_MATCH_RADIUS_M:-}
+      - SITL_EVAL_REPORT_RADIUS_M=${SITL_EVAL_REPORT_RADIUS_M:-}
+      - SITL_EVAL_SAMPLE_PERIOD_S=${SITL_EVAL_SAMPLE_PERIOD_S:-}
+      - SITL_EVAL_SUMMARY_PERIOD_S=${SITL_EVAL_SUMMARY_PERIOD_S:-}
+      - SITL_EVAL_DURATION_S=${SITL_EVAL_DURATION_S:-}
+      - SITL_EVAL_STOP_ON_TERMINAL_PHASE=${SITL_EVAL_STOP_ON_TERMINAL_PHASE:-}
+      - SITL_EVAL_COVERAGE_CELL_SIZE_M=${SITL_EVAL_COVERAGE_CELL_SIZE_M:-}
+
+    command: ["bash", "-lc", "bash /workspace/scripts/launch_sitl_eval.bash"]
 
   training:
     image: uav-search-sim:latest

@@ -11,6 +11,7 @@ env:
   decision_period_s: 2.0
   search_speed_m_s: 2.0
   max_episode_steps: 96
+  max_unproductive_scan_streak: 2
   required_target_count: 1
   target_count: 1
   world_path: worlds/search_area.sdf

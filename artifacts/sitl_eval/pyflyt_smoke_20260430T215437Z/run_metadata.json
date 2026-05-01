@@ -1,0 +1,21 @@
+{
+  "created_utc": "2026-04-30T22:02:30.358164+00:00",
+  "duration_s": 60.0,
+  "grid_altitude_ned_m": -6.0,
+  "ground_truth_targets": 6,
+  "max_altitude_m": 6.231044769287109,
+  "mean_best_detection_error_m": 0.27699450164667233,
+  "mean_best_report_error_m": 1.3432064831234438,
+  "mission_started": true,
+  "phase": "SEARCH",
+  "policy": "rl",
+  "reason": "",
+  "rl_model_path": "pyflyt_rl/artifacts/latest/model.zip",
+  "run_id": "pyflyt_smoke_20260430T215437Z",
+  "search_path_length_m": 141.52074131997557,
+  "status": "valid",
+  "summary_path": "/Users/nicknationwide/uav-search-project/artifacts/sitl_eval/pyflyt_smoke_20260430T215437Z/summary.json",
+  "targets_detected": 6,
+  "targets_reported": 4,
+  "visible_coverage_fraction": 0.615
+}

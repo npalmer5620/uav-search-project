@@ -1,0 +1,178 @@
+{
+  "created_utc": "2026-04-30T17:41:17.869843+00:00",
+  "deltas_rl_minus_grid": {
+    "mean_best_detection_error_m": -0.11294722705056226,
+    "mean_best_report_error_m": -0.5147071563598478,
+    "reported_locations_false": 5,
+    "search_path_length_m": 7.405173631955023,
+    "targets_detected": 0,
+    "targets_reported": -1,
+    "time_to_first_detection_s": 6.079999999999995,
+    "time_to_first_report_s": -6.603999999999999,
+    "visible_coverage_fraction": -0.020000000000000018
+  },
+  "duration_s": 90.0,
+  "grid_metadata": {
+    "created_utc": "2026-04-30T17:30:05.235906+00:00",
+    "duration_s": 90.0,
+    "grid_altitude_ned_m": -4.0,
+    "ground_truth_targets": 6,
+    "max_altitude_m": 4.209217071533203,
+    "mean_best_detection_error_m": 0.38916532924357544,
+    "mean_best_report_error_m": 1.9425884151048733,
+    "mission_started": true,
+    "phase": "SEARCH",
+    "policy": "grid",
+    "reason": "",
+    "rl_model_path": "",
+    "run_id": "compare_grid_90s_20260430T171908Z",
+    "search_path_length_m": 224.17957971297423,
+    "status": "valid",
+    "summary_path": "/Users/nicknationwide/uav-search-project/artifacts/sitl_eval/compare_grid_90s_20260430T171908Z/summary.json",
+    "targets_detected": 6,
+    "targets_reported": 4,
+    "visible_coverage_fraction": 0.98
+  },
+  "grid_run_dir": "artifacts/sitl_eval/compare_grid_90s_20260430T171908Z",
+  "metrics": {
+    "detected_not_reported": {
+      "grid": 2,
+      "rl": 3
+    },
+    "detections_false": {
+      "grid": 2738,
+      "rl": 2793
+    },
+    "detections_matched": {
+      "grid": 920,
+      "rl": 1826
+    },
+    "detections_total": {
+      "grid": 3658,
+      "rl": 4619
+    },
+    "elapsed_s": {
+      "grid": 90.3,
+      "rl": 90.2
+    },
+    "ground_truth_targets": {
+      "grid": 6,
+      "rl": 6
+    },
+    "max_altitude_m": {
+      "grid": 4.209217071533203,
+      "rl": 4.226116180419922
+    },
+    "mean_best_detection_error_m": {
+      "grid": 0.38916532924357544,
+      "rl": 0.2762181021930132
+    },
+    "mean_best_report_error_m": {
+      "grid": 1.9425884151048733,
+      "rl": 1.4278812587450256
+    },
+    "mean_first_detection_time_s": {
+      "grid": 8.797333333333333,
+      "rl": 16.328666666666667
+    },
+    "mean_first_report_time_s": {
+      "grid": 49.852,
+      "rl": 55.36666666666667
+    },
+    "median_best_detection_error_m": {
+      "grid": 0.3783096965206426,
+      "rl": 0.31045114752118325
+    },
+    "median_best_report_error_m": {
+      "grid": 1.5483322806962057,
+      "rl": 1.5524944863495596
+    },
+    "mission_started": {
+      "grid": true,
+      "rl": true
+    },
+    "path_coverage_fraction": {
+      "grid": 0.34,
+      "rl": 0.2
+    },
+    "path_length_m": {
+      "grid": 228.3445599434729,
+      "rl": 235.36285056524963
+    },
+    "phase": {
+      "grid": "SEARCH",
+      "rl": "SEARCH"
+    },
+    "reported_locations_false": {
+      "grid": 3,
+      "rl": 8
+    },
+    "reported_locations_matched": {
+      "grid": 5,
+      "rl": 5
+    },
+    "reported_locations_total": {
+      "grid": 8,
+      "rl": 13
+    },
+    "search_path_length_m": {
+      "grid": 224.17957971297423,
+      "rl": 231.58475334492925
+    },
+    "targets_detected": {
+      "grid": 6,
+      "rl": 6
+    },
+    "targets_reported": {
+      "grid": 4,
+      "rl": 3
+    },
+    "targets_visible": {
+      "grid": 6,
+      "rl": 6
+    },
+    "time_to_first_detection_s": {
+      "grid": 1.1640000000000015,
+      "rl": 7.243999999999996
+    },
+    "time_to_first_report_s": {
+      "grid": 21.504,
+      "rl": 14.900000000000002
+    },
+    "visible_coverage_fraction": {
+      "grid": 0.98,
+      "rl": 0.96
+    },
+    "visible_not_detected": {
+      "grid": 0,
+      "rl": 0
+    }
+  },
+  "notes": [
+    "Both runs validated mission_started=true, max_altitude_m>=2.0, search_path_length_m>=5.0.",
+    "Targets are in-bounds people from worlds/search_area.sdf under the default 40x40m search area.",
+    "Reported locations are mission-controller investigated markers matched to ground truth within 4m."
+  ],
+  "rl_metadata": {
+    "created_utc": "2026-04-30T17:40:37.104599+00:00",
+    "duration_s": 90.0,
+    "grid_altitude_ned_m": -4.0,
+    "ground_truth_targets": 6,
+    "max_altitude_m": 4.226116180419922,
+    "mean_best_detection_error_m": 0.2762181021930132,
+    "mean_best_report_error_m": 1.4278812587450256,
+    "mission_started": true,
+    "phase": "SEARCH",
+    "policy": "rl",
+    "reason": "",
+    "rl_model_path": "artifacts/rl/search_policy_v2_candidate_actions_50k/model.zip",
+    "run_id": "compare_rl_90s_20260430T173015Z",
+    "search_path_length_m": 231.58475334492925,
+    "status": "valid",
+    "summary_path": "/Users/nicknationwide/uav-search-project/artifacts/sitl_eval/compare_rl_90s_20260430T173015Z/summary.json",
+    "targets_detected": 6,
+    "targets_reported": 3,
+    "visible_coverage_fraction": 0.96
+  },
+  "rl_run_dir": "artifacts/sitl_eval/compare_rl_90s_20260430T173015Z"
+}

@@ -29,10 +29,13 @@ fi
 SEARCH_POLICY="${SEARCH_POLICY:-grid}"
 MAVSDK_SYSTEM_ADDRESS="${MAVSDK_SYSTEM_ADDRESS:-udpin://0.0.0.0:14540}"
 RL_POLICY_VERSION="${RL_POLICY_VERSION:-v2}"
+RL_POLICY_KEY="$(printf '%s' "$RL_POLICY_VERSION" | tr '[:upper:]' '[:lower:]')"
 RL_ALGORITHM="${RL_ALGORITHM:-dqn}"
 if [[ -z "${RL_ARTIFACT_DIR:-}" ]]; then
-    if [[ "$RL_POLICY_VERSION" == "v1" ]]; then
+    if [[ "$RL_POLICY_KEY" == "v1" ]]; then
         RL_ARTIFACT_DIR="artifacts/rl/search_policy"
+    elif [[ "$RL_POLICY_KEY" == pyflyt* ]]; then
+        RL_ARTIFACT_DIR="pyflyt_rl/artifacts/latest"
     else
         RL_ARTIFACT_DIR="artifacts/rl/search_policy_v2"
     fi
@@ -63,20 +66,37 @@ TRACKING_MIN_CONFIDENCE="${TRACKING_MIN_CONFIDENCE:-0.65}"
 USE_SIM_TIME="${USE_SIM_TIME:-true}"
 TAKEOFF_TIMEOUT_SECONDS="${TAKEOFF_TIMEOUT_SECONDS:-60.0}"
 HANDOFF_TIMEOUT_SECONDS="${HANDOFF_TIMEOUT_SECONDS:-60.0}"
+MAVSDK_REQUIRE_FULL_HEALTH="${MAVSDK_REQUIRE_FULL_HEALTH:-false}"
 RL_MODEL_PATH="${RL_MODEL_PATH:-$RL_ARTIFACT_DIR/model.zip}"
 RL_VECNORMALIZE_PATH="${RL_VECNORMALIZE_PATH:-artifacts/rl/search_policy/vecnormalize.pkl}"
+RL_PYFLYT_CONFIG_PATH="${RL_PYFLYT_CONFIG_PATH:-}"
 if [[ -z "${RL_DECISION_PERIOD_S:-}" ]]; then
-    if [[ "$RL_POLICY_VERSION" == "v2" ]]; then
+    if [[ "$RL_POLICY_KEY" == "v2" ]]; then
         RL_DECISION_PERIOD_S="2.0"
+    elif [[ "$RL_POLICY_KEY" == pyflyt* ]]; then
+        RL_DECISION_PERIOD_S="1.5"
     else
         RL_DECISION_PERIOD_S="0.5"
     fi
 fi
 RL_MAX_STEP_XY_M="${RL_MAX_STEP_XY_M:-4.0}"
-RL_SCAN_YAW_STEP_DEG="${RL_SCAN_YAW_STEP_DEG:-25.0}"
+if [[ -z "${RL_SCAN_YAW_STEP_DEG:-}" ]]; then
+    if [[ "$RL_POLICY_KEY" == pyflyt* ]]; then
+        RL_SCAN_YAW_STEP_DEG="35.0"
+    else
+        RL_SCAN_YAW_STEP_DEG="25.0"
+    fi
+fi
 RL_MAX_YAW_STEP_DEG="${RL_MAX_YAW_STEP_DEG:-25.0}"
+RL_MAX_UNPRODUCTIVE_SCAN_STREAK="${RL_MAX_UNPRODUCTIVE_SCAN_STREAK:-2}"
 RL_COVERAGE_GRID_SIDE="${RL_COVERAGE_GRID_SIDE:-16}"
-RL_CELL_SIZE_M="${RL_CELL_SIZE_M:-4.0}"
+if [[ -z "${RL_CELL_SIZE_M:-}" ]]; then
+    if [[ "$RL_POLICY_KEY" == pyflyt* ]]; then
+        RL_CELL_SIZE_M="2.0"
+    else
+        RL_CELL_SIZE_M="4.0"
+    fi
+fi
 RL_PATCH_SIDE="${RL_PATCH_SIDE:-11}"
 
 case "$SEARCH_POLICY" in
@@ -100,10 +120,14 @@ case "$SEARCH_POLICY" in
             -p rl.max_step_xy_m:="$RL_MAX_STEP_XY_M"
             -p rl.scan_yaw_step_deg:="$RL_SCAN_YAW_STEP_DEG"
             -p rl.max_yaw_step_deg:="$RL_MAX_YAW_STEP_DEG"
+            -p rl.max_unproductive_scan_streak:="$RL_MAX_UNPRODUCTIVE_SCAN_STREAK"
             -p rl.coverage_grid_side:="$RL_COVERAGE_GRID_SIDE"
             -p rl.cell_size_m:="$RL_CELL_SIZE_M"
             -p rl.patch_side:="$RL_PATCH_SIDE"
         )
+        if [[ -n "$RL_PYFLYT_CONFIG_PATH" ]]; then
+            EXTRA_ARGS+=(-p rl.pyflyt_config_path:="$RL_PYFLYT_CONFIG_PATH")
+        fi
         ;;
     *)
         echo "ERROR: Unsupported SEARCH_POLICY='$SEARCH_POLICY' (expected 'grid' or 'rl')"
@@ -132,16 +156,21 @@ echo "TRACKING_MIN_CONF:    $TRACKING_MIN_CONFIDENCE"
 echo "USE_SIM_TIME:         $USE_SIM_TIME"
 echo "TAKEOFF_TIMEOUT:      $TAKEOFF_TIMEOUT_SECONDS"
 echo "HANDOFF_TIMEOUT:      $HANDOFF_TIMEOUT_SECONDS"
+echo "MAVSDK_FULL_HEALTH:   $MAVSDK_REQUIRE_FULL_HEALTH"
 if [[ "$POLICY_LABEL" == "rl" ]]; then
     echo "RL_POLICY_VERSION:    $RL_POLICY_VERSION"
     echo "RL_ALGORITHM:         $RL_ALGORITHM"
     echo "RL_ARTIFACT_DIR:      $RL_ARTIFACT_DIR"
     echo "RL_MODEL_PATH:        $RL_MODEL_PATH"
     echo "RL_VECNORMALIZE:      $RL_VECNORMALIZE_PATH"
+    if [[ "$RL_POLICY_KEY" == pyflyt* ]]; then
+        echo "RL_PYFLYT_CONFIG:     ${RL_PYFLYT_CONFIG_PATH:-auto}"
+    fi
     echo "RL_DECISION_PERIOD:   $RL_DECISION_PERIOD_S"
     echo "RL_MAX_STEP_XY:       $RL_MAX_STEP_XY_M"
     echo "RL_SCAN_YAW_STEP:     $RL_SCAN_YAW_STEP_DEG deg"
     echo "RL_MAX_YAW_STEP:      $RL_MAX_YAW_STEP_DEG deg"
+    echo "RL_SCAN_STREAK_CAP:   $RL_MAX_UNPRODUCTIVE_SCAN_STREAK"
     echo "RL_COVERAGE_GRID:     $RL_COVERAGE_GRID_SIDE"
     echo "RL_CELL_SIZE_M:       $RL_CELL_SIZE_M"
     echo "RL_PATCH_SIDE:        $RL_PATCH_SIDE"
@@ -171,6 +200,7 @@ exec python3 -m "$PLANNING_MODULE" \
     -p tracking.min_age:="$TRACKING_MIN_AGE" \
     -p tracking.min_confidence:="$TRACKING_MIN_CONFIDENCE" \
     -p mavsdk.system_address:="$MAVSDK_SYSTEM_ADDRESS" \
+    -p mavsdk.require_full_health:="$MAVSDK_REQUIRE_FULL_HEALTH" \
     -p use_sim_time:="$USE_SIM_TIME" \
     -p takeoff_timeout_seconds:="$TAKEOFF_TIMEOUT_SECONDS" \
     -p handoff_timeout_seconds:="$HANDOFF_TIMEOUT_SECONDS" \
